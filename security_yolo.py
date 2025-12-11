@@ -59,12 +59,30 @@ def check_gh_auth() -> bool:
     Returns:
         True if authenticated, False otherwise
     """
+    import sys
     try:
         result = subprocess.run(
             ["gh", "auth", "status"],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            shell=(sys.platform == 'win32')  # Use shell on Windows for PATH resolution
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def verify_claude_cli() -> bool:
+    """Verify Claude CLI is installed and working."""
+    import sys
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            shell=(sys.platform == 'win32')  # Use shell on Windows for PATH resolution
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -90,6 +108,13 @@ def create_yolo_client(project_dir: Path, model: str) -> ClaudeSDKClient:
         raise ValueError(
             "CLAUDE_CODE_OAUTH_TOKEN environment variable not set.\n"
             "Run 'claude setup-token' after installing the Claude Code CLI."
+        )
+
+    # Verify Claude CLI is installed
+    if not verify_claude_cli():
+        raise ValueError(
+            "Claude CLI is not installed or not working.\n"
+            "Install with: npm install -g @anthropics/claude-code"
         )
 
     # Check GitHub CLI authentication

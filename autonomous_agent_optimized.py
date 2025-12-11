@@ -20,9 +20,32 @@ import asyncio
 import os
 import sys
 import subprocess
+import signal
 from pathlib import Path
 import argparse
 from datetime import datetime
+
+# Windows async event loop fix
+if sys.platform == 'win32':
+    # Set the event loop policy to WindowsSelectorEventLoopPolicy to avoid ProactorEventLoop issues
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# Global flag for graceful shutdown
+shutdown_requested = False
+
+
+def signal_handler(signum, frame):
+    """Handle CTRL+C gracefully."""
+    global shutdown_requested
+    shutdown_requested = True
+    print("\n\n⚠️  Shutdown requested. Cleaning up...")
+    sys.exit(0)
+
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+if sys.platform != 'win32':
+    signal.signal(signal.SIGTERM, signal_handler)
 
 # Import optimized modules
 from github_cache import GitHubCache
@@ -31,6 +54,7 @@ from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
 from agent import run_agent_session
 from prompts import get_initializer_prompt, get_coding_prompt
+from connection_helper import managed_client_connection, print_connection_diagnostics, ConnectionError
 
 # Load environment variables
 try:
@@ -47,28 +71,75 @@ def check_gh_auth() -> bool:
             ["gh", "auth", "status"],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            shell=(sys.platform == 'win32')  # Use shell on Windows for PATH resolution
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
 
 
+def check_network_connectivity() -> bool:
+    """Check if we can reach Anthropic API."""
+    try:
+        import socket
+        # Try to connect to Anthropic API (just check DNS and connectivity)
+        socket.create_connection(("api.anthropic.com", 443), timeout=5)
+        return True
+    except Exception:
+        return False
+
+
 def validate_environment():
     """Validate required environment variables and GitHub CLI auth."""
-    oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    print("\n🔍 Validating environment...")
 
+    # Check OAuth token
+    oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
     if not oauth_token:
         print("❌ Error: CLAUDE_CODE_OAUTH_TOKEN environment variable not set.")
         print("Run 'claude setup-token' to generate a token.")
         sys.exit(1)
+    print(f"✓ OAuth token is set (length: {len(oauth_token)})")
 
+    # Check Claude CLI
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            shell=(sys.platform == 'win32')  # Use shell on Windows for PATH resolution
+        )
+        if result.returncode == 0:
+            print(f"✓ Claude CLI is installed ({result.stdout.strip()})")
+        else:
+            print("❌ Error: Claude CLI is not working properly.")
+            print("Reinstall with: npm install -g @anthropics/claude-code")
+            sys.exit(1)
+    except FileNotFoundError:
+        print("❌ Error: Claude CLI is not installed.")
+        print("Install with: npm install -g @anthropics/claude-code")
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("❌ Error: Claude CLI command timed out.")
+        sys.exit(1)
+
+    # Check GitHub CLI
     if not check_gh_auth():
         print("❌ Error: GitHub CLI is not authenticated.")
         print("Run 'gh auth login' to authenticate with GitHub.")
         sys.exit(1)
+    print("✓ GitHub CLI is authenticated")
 
-    print("✅ Environment validated (Claude token + GitHub CLI auth)")
+    # Check network connectivity
+    if check_network_connectivity():
+        print("✓ Network connection to api.anthropic.com is working")
+    else:
+        print("⚠️  Warning: Cannot reach api.anthropic.com")
+        print("   Check your firewall, proxy, or internet connection")
+
+    print("✅ Environment validation complete\n")
 
 
 def create_client_with_mode(project_dir: Path, model: str, security_mode: str):
@@ -137,6 +208,11 @@ async def run_optimized_autonomous_agent(
 
     iteration = 0
     while True:
+        # Check for shutdown request
+        if shutdown_requested:
+            print("\n⚠️  Shutdown requested. Exiting...")
+            break
+
         iteration += 1
 
         if max_iterations and iteration > max_iterations:
@@ -170,16 +246,28 @@ async def run_optimized_autonomous_agent(
                 prompt = get_coding_prompt()
                 print("🔨 Running coding agent (working on GitHub issues)")
 
-            # Run agent session
+            # Run agent session with robust connection handling
             print(f"🤖 Starting agent with model: {model}\n")
 
-            async with client:
-                status, response = await run_agent_session(
+            try:
+                async with managed_client_connection(
                     client,
-                    prompt,
-                    project_dir,
-                    logger=logger  # Pass logger to agent
-                )
+                    timeout_seconds=60,  # 60s timeout for initialization
+                    max_retries=2  # Retry twice on failure
+                ) as connected_client:
+                    status, response = await run_agent_session(
+                        connected_client,
+                        prompt,
+                        project_dir,
+                        logger=logger  # Pass logger to agent
+                    )
+            except ConnectionError as e:
+                # Connection failed even after retries
+                logger.log_error("connection_error", str(e))
+                print(f"\n❌ Failed to connect to Claude Code CLI: {e}\n")
+                print_connection_diagnostics()
+                status = "error"
+                response = str(e)
 
             # End session timer
             session_duration_ms = logger.end_timer('session')
