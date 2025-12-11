@@ -29,7 +29,7 @@ from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
 from github_cache import GitHubCache
 from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
-from prompts import get_initializer_prompt, get_coding_prompt
+from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project
 
 # Load .env if available
 try:
@@ -64,6 +64,9 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
     # Ensure absolute path
     project_dir = project_dir.resolve()
     project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy app_spec.txt to project directory
+    copy_spec_to_project(project_dir)
 
     # Initialize GitHub integration
     cache = GitHubCache(project_dir)
