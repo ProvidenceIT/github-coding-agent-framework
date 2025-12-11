@@ -73,9 +73,9 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
     integration = create_enhanced_integration(project_dir, cache)
     git_mgr = create_git_manager(project_dir, auto_push=True)
 
-    # Check if first run
-    github_marker = project_dir / ".github_project.json"
-    is_first_run = not github_marker.exists()
+    # Check if first run (use separate marker file, not the data file)
+    init_marker = project_dir / ".initialized"
+    is_first_run = not init_marker.exists()
 
     # Print banner
     print("\n" + "="*70)
@@ -156,7 +156,7 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
                 # After first run, switch modes
                 if is_first_run:
                     is_first_run = False
-                    github_marker.write_text(f"Initialized: {datetime.now().isoformat()}")
+                    init_marker.write_text(f"Initialized: {datetime.now().isoformat()}")
                     print("\n✅ Initialization complete! Next session will use coding agent.\n")
 
             except Exception as e:
