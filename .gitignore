@@ -6,4 +6,7 @@ logs/
 
 .env
 venv
+__pycache__/
 __pycache__tmp/
+*.pyc
+*.pyo
