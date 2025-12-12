@@ -40,7 +40,7 @@ class ProgressMonitor:
         if not self.project_file.exists():
             return None
 
-        with open(self.project_file, 'r') as f:
+        with open(self.project_file, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     def load_cache_data(self) -> Optional[Dict]:
@@ -48,7 +48,7 @@ class ProgressMonitor:
         if not self.cache_file.exists():
             return None
 
-        with open(self.cache_file, 'r') as f:
+        with open(self.cache_file, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     def count_log_lines(self) -> Dict[str, int]:
@@ -61,13 +61,13 @@ class ProgressMonitor:
         # Count daily log
         daily_log = self.log_dir / "agent_daily.log"
         if daily_log.exists():
-            with open(daily_log, 'r') as f:
+            with open(daily_log, 'r', encoding='utf-8') as f:
                 counts['daily'] = sum(1 for _ in f)
 
         # Count error log
         error_log = self.log_dir / "errors.log"
         if error_log.exists():
-            with open(error_log, 'r') as f:
+            with open(error_log, 'r', encoding='utf-8') as f:
                 counts['errors'] = sum(1 for _ in f)
 
         # Count session logs
@@ -77,7 +77,7 @@ class ProgressMonitor:
         # Count total session log lines
         total_session_lines = 0
         for log_file in session_logs:
-            with open(log_file, 'r') as f:
+            with open(log_file, 'r', encoding='utf-8') as f:
                 total_session_lines += sum(1 for _ in f)
         counts['session_lines'] = total_session_lines
 
@@ -106,7 +106,7 @@ class ProgressMonitor:
             }
 
             try:
-                with open(log_file, 'r') as f:
+                with open(log_file, 'r', encoding='utf-8') as f:
                     for line in f:
                         try:
                             entry = json.loads(line)

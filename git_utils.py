@@ -260,9 +260,47 @@ class GitManager:
             print(f"❌ {error_msg}")
             return False, error_msg
 
+    def pull_rebase(self, branch: str = "main") -> Tuple[bool, str]:
+        """
+        Pull latest changes from remote with rebase.
+
+        Returns:
+            (success: bool, message: str)
+        """
+        try:
+            print(f"📥 Pulling latest changes from origin/{branch}...")
+            result = subprocess.run(
+                ['git', 'pull', '--rebase', 'origin', branch],
+                cwd=self.project_dir,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                print(f"✅ Pull successful")
+                return True, "Pulled latest changes"
+            else:
+                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+
+                # Check for merge conflicts
+                if "conflict" in error_msg.lower():
+                    print(f"⚠️  Merge conflict detected, aborting rebase...")
+                    subprocess.run(
+                        ['git', 'rebase', '--abort'],
+                        cwd=self.project_dir,
+                        capture_output=True
+                    )
+                    return False, "Merge conflict - rebase aborted"
+
+                return False, f"Pull failed: {error_msg}"
+
+        except Exception as e:
+            return False, f"Pull error: {str(e)}"
+
     def push(self, branch: str = "main") -> Tuple[bool, str]:
         """
         Push commits to remote repository.
+        Automatically pulls with rebase first to handle remote changes.
 
         Returns:
             (success: bool, message: str)
@@ -283,35 +321,62 @@ class GitManager:
             if not result.stdout.strip():
                 return False, "No git remote configured"
 
+            # ALWAYS pull before push to avoid rejection
+            pull_success, pull_msg = self.pull_rebase(branch)
+            if not pull_success:
+                print(f"⚠️  Pull failed: {pull_msg}, attempting push anyway...")
+
             # Push to remote
             print(f"📤 Pushing to remote ({branch})...")
-            subprocess.run(
+            push_result = subprocess.run(
                 ['git', 'push', 'origin', branch],
                 cwd=self.project_dir,
-                check=True,
-                capture_output=True
+                capture_output=True,
+                text=True
             )
 
-            print(f"✅ Successfully pushed to origin/{branch}")
-            return True, f"Pushed to origin/{branch}"
+            if push_result.returncode == 0:
+                print(f"✅ Successfully pushed to origin/{branch}")
+                return True, f"Pushed to origin/{branch}"
 
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = push_result.stderr if push_result.stderr else push_result.stdout
 
-            # Handle common errors
+            # Handle rejection - try pull and push again
+            if "rejected" in error_msg.lower() or "non-fast-forward" in error_msg.lower():
+                print(f"⚠️  Push rejected, pulling and retrying...")
+                pull_success, pull_msg = self.pull_rebase(branch)
+
+                if pull_success:
+                    # Retry push
+                    retry_result = subprocess.run(
+                        ['git', 'push', 'origin', branch],
+                        cwd=self.project_dir,
+                        capture_output=True,
+                        text=True
+                    )
+
+                    if retry_result.returncode == 0:
+                        print(f"✅ Successfully pushed to origin/{branch} after pull")
+                        return True, f"Pushed to origin/{branch} (after pull)"
+                    else:
+                        return False, f"Push failed after pull: {retry_result.stderr}"
+                else:
+                    return False, f"Cannot push - pull failed: {pull_msg}"
+
+            # Handle authentication errors
             if "authentication" in error_msg.lower() or "permission" in error_msg.lower():
                 print(f"⚠️  Push failed: Authentication required")
                 print(f"   Run: gh auth login")
                 print(f"   Or set up SSH keys")
                 return False, "Authentication required"
 
-            elif "rejected" in error_msg.lower():
-                print(f"⚠️  Push rejected: Pull required first")
-                return False, "Pull required before push"
+            print(f"❌ Push failed: {error_msg}")
+            return False, error_msg
 
-            else:
-                print(f"❌ Push failed: {error_msg}")
-                return False, error_msg
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.decode() if e.stderr else str(e)
+            print(f"❌ Push failed: {error_msg}")
+            return False, error_msg
 
     def commit_and_push(
         self,

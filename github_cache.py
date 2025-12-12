@@ -42,7 +42,7 @@ class GitHubCache:
         """Load persistent cache from disk."""
         if self.cache_file.exists():
             try:
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.permanent_cache = data.get('permanent', {})
                     self.metadata_cache = data.get('metadata', {})
@@ -58,7 +58,7 @@ class GitHubCache:
     def save_cache(self):
         """Save persistent cache to disk."""
         try:
-            with open(self.cache_file, 'w') as f:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     'permanent': self.permanent_cache,
                     'metadata': self.metadata_cache,

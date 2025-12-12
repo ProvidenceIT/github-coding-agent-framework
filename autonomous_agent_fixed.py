@@ -19,6 +19,9 @@ from pathlib import Path
 import argparse
 from datetime import datetime
 import io
+import logging
+import time
+import traceback
 
 # Fix Windows console encoding
 if sys.platform == 'win32' and sys.stdout.encoding != 'utf-8':
@@ -30,6 +33,8 @@ from github_cache import GitHubCache
 from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
 from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project
+import re
+import json
 
 # Load .env if available
 try:
@@ -39,36 +44,694 @@ except ImportError:
     pass
 
 
-async def run_agent_session(client: ClaudeSDKClient, prompt: str, project_dir: Path):
-    """Run a single agent session with the client."""
+def setup_session_logger(project_dir: Path) -> logging.Logger:
+    """
+    Create a comprehensive session logger that writes to ./logs/session_TIMESTAMP.log
+
+    Returns:
+        Logger instance configured for verbose session logging
+    """
+    # Create logs directory
+    logs_dir = project_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+
+    # Create timestamped log file
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = logs_dir / f"session_{timestamp}.log"
+
+    # Create logger
+    logger = logging.getLogger('autonomous_agent')
+    logger.setLevel(logging.DEBUG)
+
+    # Remove any existing handlers
+    logger.handlers.clear()
+
+    # Create file handler with verbose formatting
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+
+    # Create detailed formatter
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Also log to console with less verbose format
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    logger.info("="*80)
+    logger.info(f"SESSION LOGGER INITIALIZED - Log file: {log_file}")
+    logger.info("="*80)
+
+    return logger
+
+
+
+
+def analyze_session_health(response: str, session_id: str, logger: logging.Logger = None, tool_count: int = None) -> dict:
+    """
+    Analyze the session response to detect if the agent is doing meaningful work.
+
+    Args:
+        response: The text response from the agent
+        session_id: Session identifier for logging
+        logger: Logger instance
+        tool_count: Actual number of tool calls made (from SDK). If provided, this
+                   overrides pattern-based detection and is more accurate.
+
+    Returns:
+        dict with keys:
+            - is_healthy: bool
+            - warnings: list of warning messages
+            - tool_calls_count: int
+            - response_length: int
+            - has_content: bool
+    """
+    health_status = {
+        'is_healthy': True,
+        'warnings': [],
+        'tool_calls_count': 0,
+        'response_length': len(str(response)) if response else 0,
+        'has_content': bool(response and str(response).strip())
+    }
+
+    response_str = str(response) if response else ""
+
+    # Check 1: Empty or near-empty response
+    if not response_str or len(response_str.strip()) < 10:
+        health_status['is_healthy'] = False
+        health_status['warnings'].append("Response is empty or too short (< 10 chars)")
+        if logger:
+            logger.warning(f"Health check failed: Empty or near-empty response")
+        return health_status
+
+    # Check 2: Count tool usage evidence
+    # If actual tool count provided from SDK, use it directly (more accurate)
+    if tool_count is not None:
+        health_status['tool_calls_count'] = tool_count
+        if logger:
+            logger.debug(f"Health check: Using actual tool count from SDK: {tool_count}")
+    else:
+        # Fall back to pattern matching (less accurate, for legacy support)
+        tool_patterns = [
+            r'<invoke name="(\w+)"',  # XML-style tool invocations
+            r'Tool:\s*(\w+)',  # Tool: Read, Tool: Write, etc.
+            r'Using tool:\s*(\w+)',  # Using tool: Read
+            r'Calling (\w+) tool',  # Calling Read tool
+            r'Reading file:',  # Common tool operation indicators
+            r'Writing to file:',
+            r'Editing file:',
+            r'Searching for:',
+            r'Running command:',
+            r'Executing:',
+            r'<invoke',  # ANTML tool invocations
+            r'function_call',  # Function call indicators
+            r'<function_calls>',  # Function calls wrapper
+        ]
+
+        tool_matches = []
+        for pattern in tool_patterns:
+            matches = re.findall(pattern, response_str, re.IGNORECASE)
+            tool_matches.extend(matches)
+
+        health_status['tool_calls_count'] = len(tool_matches)
+        if logger:
+            logger.debug(f"Health check: Found {len(tool_matches)} tool usage indicators via pattern matching")
+
+    # Check 3: No tool usage detected
+    if health_status['tool_calls_count'] == 0:
+        health_status['is_healthy'] = False
+        health_status['warnings'].append("No tool usage detected - agent may not be doing any work")
+        if logger:
+            logger.warning("Health check failed: No tool usage detected")
+
+    # Check 4: Very short response with few tool calls
+    if health_status['response_length'] < 200 and health_status['tool_calls_count'] < 2:
+        health_status['is_healthy'] = False
+        health_status['warnings'].append(
+            f"Response too short ({health_status['response_length']} chars) with minimal tool usage ({health_status['tool_calls_count']} calls)"
+        )
+        if logger:
+            logger.warning(f"Health check failed: Short response ({health_status['response_length']} chars) with {health_status['tool_calls_count']} tool calls")
+
+    # Check 5: Look for error indicators
+    error_patterns = [
+        r'(?i)error:?\s*unable to',
+        r'(?i)failed to',
+        r'(?i)could not',
+        r'(?i)cannot find',
+        r'(?i)permission denied',
+        r'(?i)access denied',
+    ]
+
+    for pattern in error_patterns:
+        if re.search(pattern, response_str):
+            health_status['warnings'].append(f"Potential error detected in response: {pattern}")
+            if logger:
+                logger.warning(f"Health check: Potential error detected matching pattern: {pattern}")
+            break
+
+    # Check 6: Look for common "giving up" phrases
+    stall_patterns = [
+        r'(?i)i cannot proceed',
+        r'(?i)unable to continue',
+        r'(?i)nothing (more )?to do',
+        r'(?i)no changes (needed|required)',
+        r'(?i)all tasks (are )?complete',
+    ]
+
+    for pattern in stall_patterns:
+        if re.search(pattern, response_str):
+            health_status['warnings'].append(f"Agent may have stalled: matched pattern {pattern}")
+            if logger:
+                logger.warning(f"Health check: Stall indicator detected matching pattern: {pattern}")
+            break
+
+    if logger and health_status['is_healthy']:
+        logger.info(f"Health check PASSED: {health_status['tool_calls_count']} tool calls, {health_status['response_length']} chars")
+
+    return health_status
+
+
+def log_health_warnings(health_status: dict, session_id: str, logger: logging.Logger):
+    """Log health warnings to console and logger."""
+    if not health_status['is_healthy']:
+        warning_msg = f"\n⚠️  SESSION HEALTH WARNING ({session_id}):"
+        print(warning_msg)
+        logger.warning("="*80)
+        logger.warning(f"SESSION HEALTH WARNING: {session_id}")
+        logger.warning("="*80)
+
+        details = [
+            f"   Response length: {health_status['response_length']} chars",
+            f"   Tool calls detected: {health_status['tool_calls_count']}",
+            f"   Has content: {health_status['has_content']}"
+        ]
+
+        for detail in details:
+            print(detail)
+            logger.warning(detail)
+
+        for warning in health_status['warnings']:
+            msg = f"   - {warning}"
+            print(msg)
+            logger.warning(msg)
+
+        logger.warning("="*80)
+        print()
+async def run_agent_session(client: ClaudeSDKClient, prompt: str, project_dir: Path, logger: logging.Logger, session_id: str):
+    """Run a single agent session with the client.
+
+    CRITICAL FIX: Properly uses client.receive_response() to capture Claude's actual responses.
+    The SDK's client.query() returns None - responses must be retrieved via receive_response().
+    """
+    logger.info("="*80)
+    logger.info(f"STARTING AGENT SESSION: {session_id}")
+    logger.info("="*80)
+
     print("Sending prompt to agent...\n")
+
+    # Log prompt (first 500 chars)
+    prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
+    logger.debug(f"PROMPT SENT ({len(prompt)} chars):\n{prompt_preview}")
 
     # Change to project directory for command execution
     original_dir = Path.cwd()
     os.chdir(project_dir)
 
+    session_start_time = time.time()
+
     try:
-        response = await client.query(prompt)
+        # CRITICAL FIX: client.query() returns None, not the response!
+        # We must use receive_response() to actually get Claude's output
+        logger.debug("Calling client.query() to send prompt...")
+        await client.query(prompt, session_id=session_id)
+
+        logger.debug("Receiving response from Claude via receive_response()...")
+
+        # Collect all messages from Claude
+        messages = []
+        result_message = None
+        tool_count = 0
+        response_text_parts = []
+
+        # CRITICAL: Actually receive the response!
+        async for msg in client.receive_response():
+            messages.append(msg)
+            msg_type = type(msg).__name__
+            logger.debug(f"Received message type: {msg_type}")
+
+            # Process different message types
+            if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                # AssistantMessage with content blocks
+                if hasattr(msg.content, '__iter__'):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+
+                        if hasattr(block, 'text'):
+                            # TextBlock or ThinkingBlock
+                            text_preview = block.text[:200] + "..." if len(block.text) > 200 else block.text
+                            logger.info(f"Claude ({block_type}): {text_preview}")
+                            response_text_parts.append(block.text)
+
+                        elif hasattr(block, 'name'):
+                            # ToolUseBlock
+                            tool_count += 1
+                            logger.info(f"Tool #{tool_count}: {block.name}")
+                            logger.debug(f"Tool input: {getattr(block, 'input', 'N/A')}")
+
+                        elif hasattr(block, 'tool_use_id'):
+                            # ToolResultBlock
+                            logger.debug(f"Tool result for: {block.tool_use_id}")
+
+            # Check for ResultMessage (final message with cost/usage data)
+            if msg_type == 'ResultMessage' or (hasattr(msg, 'total_cost_usd') and hasattr(msg, 'num_turns')):
+                result_message = msg
+                cost = getattr(msg, 'total_cost_usd', 0)
+                turns = getattr(msg, 'num_turns', 0)
+                logger.info(f"Session complete - Cost: ${cost:.4f}, Turns: {turns}")
+
+        session_duration = time.time() - session_start_time
+
+        # Combine all text responses
+        full_response_text = "\n".join(response_text_parts) if response_text_parts else ""
+
+        # Log comprehensive response info
+        logger.info(f"AGENT RESPONSE RECEIVED (duration: {session_duration:.2f}s)")
+        logger.info(f"Messages received: {len(messages)}")
+        logger.info(f"Tool calls detected: {tool_count}")
+        logger.info(f"Response text length: {len(full_response_text)} chars")
+
+        logger.debug("="*80)
+        logger.debug("FULL AGENT RESPONSE TEXT:")
+        logger.debug(full_response_text if full_response_text else "(No text response)")
+        logger.debug("="*80)
+        logger.debug(f"All messages ({len(messages)} total):")
+        for i, msg in enumerate(messages):
+            logger.debug(f"  Message {i+1}: {type(msg).__name__}")
+        logger.debug("="*80)
+
+        logger.info(f"SESSION TIMING: {session_duration:.2f} seconds")
+
+        # Perform session health check on the collected response
+        logger.info("Performing session health check...")
+        # Pass actual tool count from SDK for accurate detection
+        health_status = analyze_session_health(full_response_text, session_id, logger, tool_count=tool_count)
+
+        # Log any health warnings
+        log_health_warnings(health_status, session_id, logger)
+
         print("\n✅ Agent session complete")
-        return "success", response
+
+        # Return the full response data
+        response_data = {
+            'messages': messages,
+            'result': result_message,
+            'text': full_response_text,
+            'tool_count': tool_count,
+            'duration': session_duration
+        }
+
+        return "success", response_data, health_status
+
     except Exception as e:
+        session_duration = time.time() - session_start_time
+
+        logger.error("="*80)
+        logger.error(f"ERROR DURING SESSION (duration: {session_duration:.2f}s)")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error("Stack trace:")
+        logger.error(traceback.format_exc())
+        logger.error("="*80)
+
         print(f"\n❌ Error during session: {e}")
-        return "error", str(e)
+
+        # Create unhealthy status for error cases
+        error_health_status = {
+            'is_healthy': False,
+            'warnings': [f"Session exception: {type(e).__name__}: {str(e)}"],
+            'tool_calls_count': 0,
+            'response_length': 0,
+            'has_content': False
+        }
+
+        return "error", str(e), error_health_status
+
     finally:
         os.chdir(original_dir)
+        logger.debug(f"Session {session_id} completed, changed back to: {original_dir}")
 
 
-async def main(project_dir: Path, model: str, max_iterations: int = None):
+async def ensure_git_and_github_repo(project_dir: Path, logger: logging.Logger):
+    """
+    Ensure git repository is initialized and GitHub repo exists.
+
+    - Checks if git is initialized in project directory
+    - If not, creates a GitHub repository in Providence IT organization
+    - Initializes git locally and sets up remote
+    - Handles GitHub authentication and permissions
+    """
+    logger.info("Checking git repository status...")
+
+    # Check if git is initialized
+    git_dir = project_dir / ".git"
+    if git_dir.exists():
+        logger.info("Git repository already initialized")
+
+        # Check if remote is set up
+        try:
+            result = subprocess.run(
+                ['git', 'remote', 'get-url', 'origin'],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            remote_url = result.stdout.strip()
+            logger.info(f"Remote origin configured: {remote_url}")
+            return
+        except subprocess.CalledProcessError:
+            logger.warning("No remote origin configured, will try to set one up")
+    else:
+        logger.info("Git repository not initialized")
+
+    # Git not initialized - need to create GitHub repo and initialize
+    print("\n" + "="*70)
+    print("  GIT REPOSITORY INITIALIZATION")
+    print("="*70)
+    print(f"  No git repository found in {project_dir.name}")
+    print(f"  Creating new GitHub repository in Providence IT organization...")
+    print("="*70 + "\n")
+
+    # Read app_spec.txt to intelligently extract project information
+    spec_file = project_dir / "app_spec.txt"
+    project_name = project_dir.name
+    project_description = "Software project managed by autonomous agent"
+
+    if spec_file.exists():
+        try:
+            spec_content = spec_file.read_text(encoding='utf-8')
+            lines = [line.strip() for line in spec_content.split('\n') if line.strip()]
+
+            # Extract title (first H1 or title-like line)
+            title_parts = []
+            brands = []
+            project_type = None
+
+            for i, line in enumerate(lines[:20]):  # Look at first 20 lines
+                # Remove markdown formatting
+                clean_line = line.lstrip('#').strip()
+
+                # First major heading is likely the project name
+                if i < 5 and (line.startswith('#') or line.isupper()):
+                    if clean_line and len(clean_line) > 3:
+                        title_parts.append(clean_line)
+
+                # Look for brand names (common patterns)
+                if any(indicator in clean_line.lower() for indicator in ['.nl', '.com', 'brand']):
+                    # Extract domain-like names
+                    import re
+                    domain_matches = re.findall(r'\b([A-Za-z]+(?:\.nl|\.com|\.io))\b', clean_line)
+                    brands.extend(domain_matches)
+
+                # Detect project type
+                lower = clean_line.lower()
+                if 'dashboard' in lower or 'analytics' in lower:
+                    project_type = 'dashboard'
+                elif 'automation' in lower or 'workflow' in lower:
+                    project_type = 'automation'
+                elif 'api' in lower:
+                    project_type = 'api'
+                elif 'website' in lower or 'landing' in lower:
+                    project_type = 'website'
+                elif 'app' in lower or 'application' in lower:
+                    project_type = 'app'
+
+            # Build descriptive project name
+            if title_parts:
+                # Use the first title, but limit length
+                main_title = title_parts[0][:60]
+                project_name = main_title
+
+                # If we found brands, potentially shorten and add context
+                if brands:
+                    # Remove duplicates and limit
+                    unique_brands = list(dict.fromkeys(brands))[:2]
+                    brands_str = '-'.join([b.replace('.nl', '').replace('.com', '') for b in unique_brands])
+
+                    # If title is very long, create concise name with brands
+                    if len(main_title) > 40:
+                        if project_type:
+                            project_name = f"{brands_str}-{project_type}"
+                        else:
+                            # Extract key words from title
+                            key_words = [w for w in main_title.lower().split() if len(w) > 4 and w not in ['powered', 'platform', 'system']][:3]
+                            project_name = f"{brands_str}-{'-'.join(key_words)}"
+                    else:
+                        project_name = main_title
+
+                # Extract description from project overview or vision
+                for i, line in enumerate(lines):
+                    if any(keyword in line.lower() for keyword in ['overview', 'vision', 'description', 'about']):
+                        # Get next non-empty line as description
+                        for j in range(i+1, min(i+5, len(lines))):
+                            if lines[j] and not lines[j].startswith('#') and len(lines[j]) > 20:
+                                project_description = lines[j][:100]
+                                break
+                        break
+
+            logger.debug(f"Extracted project name: {project_name}")
+            logger.debug(f"Extracted brands: {brands}")
+            logger.debug(f"Detected project type: {project_type}")
+            logger.debug(f"Description: {project_description}")
+
+        except Exception as e:
+            logger.warning(f"Failed to parse app_spec.txt intelligently: {e}")
+            # Fallback to simple extraction
+            try:
+                spec_content = spec_file.read_text(encoding='utf-8')
+                lines = spec_content.split('\n')
+                for line in lines[:10]:
+                    if line.strip() and not line.startswith('#'):
+                        project_name = line.strip()[:50]
+                        break
+            except:
+                pass
+
+    # Sanitize project name for GitHub (lowercase, hyphens, alphanumeric)
+    repo_name = re.sub(r'[^a-zA-Z0-9\-_]', '-', project_name.lower())
+    repo_name = re.sub(r'-+', '-', repo_name)  # Remove duplicate hyphens
+    repo_name = repo_name.strip('-')  # Remove leading/trailing hyphens
+
+    # Ensure reasonable length (GitHub limit is 100 chars)
+    if len(repo_name) > 80:
+        repo_name = repo_name[:80].rstrip('-')
+
+    logger.info(f"Final repository name: {repo_name}")
+    print(f"   Repository name: {repo_name}")
+
+    # Check GitHub authentication
+    try:
+        result = subprocess.run(
+            ['gh', 'auth', 'status'],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print("⚠️  GitHub CLI not authenticated. Please run: gh auth login")
+            logger.error("GitHub CLI not authenticated")
+            raise Exception("GitHub authentication required. Run: gh auth login")
+        logger.info("GitHub CLI authenticated")
+    except FileNotFoundError:
+        print("❌ GitHub CLI (gh) not found. Please install: https://cli.github.com/")
+        logger.error("GitHub CLI not found")
+        raise Exception("GitHub CLI not installed")
+
+    # Create GitHub repository in Providence IT organization
+    org_name = "ProvidenceIT"
+    print(f"📦 Creating repository: {org_name}/{repo_name}")
+    logger.info(f"Creating GitHub repository: {org_name}/{repo_name}")
+
+    try:
+        # Create private repository in organization
+        result = subprocess.run(
+            [
+                'gh', 'repo', 'create',
+                f'{org_name}/{repo_name}',
+                '--private',
+                '--description', project_description,
+                '--clone=false'  # Don't clone, we'll init locally
+            ],
+            capture_output=True,
+            text=True,
+            cwd=project_dir
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip()
+            if "already exists" in error_msg.lower():
+                print(f"✓ Repository {org_name}/{repo_name} already exists")
+                logger.info(f"Repository already exists: {org_name}/{repo_name}")
+            else:
+                print(f"❌ Failed to create repository: {error_msg}")
+                logger.error(f"Failed to create repository: {error_msg}")
+                raise Exception(f"Failed to create GitHub repository: {error_msg}")
+        else:
+            print(f"✅ Created repository: {org_name}/{repo_name}")
+            logger.info(f"Successfully created repository: {org_name}/{repo_name}")
+
+    except Exception as e:
+        print(f"❌ Error creating GitHub repository: {e}")
+        logger.error(f"Error creating GitHub repository: {e}")
+        raise
+
+    # Initialize git locally
+    print("\n📝 Initializing local git repository...")
+    logger.info("Initializing local git repository")
+
+    try:
+        # Initialize git
+        subprocess.run(
+            ['git', 'init'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        logger.info("Git initialized")
+
+        # Configure git user
+        subprocess.run(
+            ['git', 'config', 'user.name', 'Autonomous Agent'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        subprocess.run(
+            ['git', 'config', 'user.email', 'agent@providence.it'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        logger.info("Git user configured")
+
+        # Set up remote
+        remote_url = f"https://github.com/{org_name}/{repo_name}.git"
+        subprocess.run(
+            ['git', 'remote', 'add', 'origin', remote_url],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        logger.info(f"Remote origin added: {remote_url}")
+
+        # Create initial commit with .gitignore
+        gitignore_content = """# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Project specific
+.initialized
+.github_project.json
+"""
+        gitignore_path = project_dir / ".gitignore"
+        gitignore_path.write_text(gitignore_content, encoding='utf-8')
+        logger.info("Created .gitignore")
+
+        subprocess.run(
+            ['git', 'add', '.gitignore', 'app_spec.txt'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        subprocess.run(
+            ['git', 'commit', '-m', 'Initial commit: Project setup'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        logger.info("Initial commit created")
+
+        # Set default branch to main
+        subprocess.run(
+            ['git', 'branch', '-M', 'main'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+
+        # Push to remote
+        print("📤 Pushing to GitHub...")
+        subprocess.run(
+            ['git', 'push', '-u', 'origin', 'main'],
+            cwd=project_dir,
+            check=True,
+            capture_output=True
+        )
+        logger.info("Pushed to remote")
+
+        print(f"✅ Git repository initialized and pushed to {org_name}/{repo_name}")
+        print(f"   URL: https://github.com/{org_name}/{repo_name}\n")
+
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        print(f"❌ Error initializing git: {error_msg}")
+        logger.error(f"Error initializing git: {error_msg}")
+        raise Exception(f"Failed to initialize git repository: {error_msg}")
+
+
+async def main(project_dir: Path, model: str, max_iterations: int = None, project_name: str = None):
     """Main autonomous agent loop."""
+    run_start_time = time.time()
 
     # Ensure absolute path
     project_dir = project_dir.resolve()
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    # Initialize logger FIRST
+    logger = setup_session_logger(project_dir)
+    logger.info(f"Starting autonomous agent run")
+    logger.info(f"Project directory: {project_dir}")
+    logger.info(f"Project name: {project_name if project_name else project_dir.name}")
+    logger.info(f"Model: {model}")
+    logger.info(f"Max iterations: {max_iterations if max_iterations else 'unlimited'}")
+
     # Copy app_spec.txt to project directory
-    copy_spec_to_project(project_dir)
+    logger.debug("Copying app_spec.txt to project directory")
+    copy_spec_to_project(project_dir, project_name=project_name)
+
+    # Check and initialize git repository if needed
+    logger.debug("Checking git repository status")
+    await ensure_git_and_github_repo(project_dir, logger)
 
     # Initialize GitHub integration
+    logger.debug("Initializing GitHub cache and integration")
     cache = GitHubCache(project_dir)
     integration = create_enhanced_integration(project_dir, cache)
     git_mgr = create_git_manager(project_dir, auto_push=True)
@@ -76,6 +739,7 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
     # Check if first run (use separate marker file, not the data file)
     init_marker = project_dir / ".initialized"
     is_first_run = not init_marker.exists()
+    logger.info(f"First run: {is_first_run}")
 
     # Print banner
     print("\n" + "="*70)
@@ -94,28 +758,31 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
 
     # KEY FIX: Change to project directory BEFORE creating client
     print(f"Changing to project directory: {project_dir}\n")
+    logger.debug(f"Changing working directory to: {project_dir}")
     os.chdir(project_dir)
 
-    # Create client ONCE at the start, outside the loop
-    print("Creating Claude Code client...")
-    client = ClaudeSDKClient(
-        options=ClaudeCodeOptions(
-            model=model,
-            system_prompt="You are an expert full-stack developer. Use GitHub Issues and GitHub Projects for project management via gh CLI. Build production-quality code with tests.",
-            allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
-            max_turns=50
-        )
+    # CRITICAL FIX: Create client options ONCE, but create NEW client each iteration
+    # This prevents context accumulation that causes "API Error: 400 tool use concurrency"
+    client_options = ClaudeCodeOptions(
+        model=model,
+        system_prompt="You are an expert full-stack developer. Use GitHub Issues and GitHub Projects for project management via gh CLI. Build production-quality code with tests.",
+        allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+        max_turns=50  # Sufficient for: orientation (15-20) + implementation (20-30) + verification (5-10)
     )
 
-    print("Connecting to Claude Code CLI...")
-    async with client:
-        print("✓ Connected!\n")
+    logger.debug(f"Client options:")
+    logger.debug(f"  Model: {model}")
+    logger.debug(f"  System prompt: {client_options.system_prompt}")
+    logger.debug(f"  Allowed tools: {client_options.allowed_tools}")
+    logger.debug(f"  Max turns: {client_options.max_turns}")
 
-        iteration = 0
-        while True:
+    iteration = 0
+    while True:
             iteration += 1
+            iteration_start_time = time.time()
 
             if max_iterations and iteration > max_iterations:
+                logger.info(f"Reached maximum iterations ({max_iterations})")
                 print(f"\n✅ Reached maximum iterations ({max_iterations})")
                 break
 
@@ -124,6 +791,10 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
             print(f"\n{'='*70}")
             print(f"  SESSION {iteration}: {session_id}")
             print(f"{'='*70}\n")
+
+            logger.info("="*80)
+            logger.info(f"ITERATION {iteration} - SESSION ID: {session_id}")
+            logger.info("="*80)
 
             try:
                 # Choose prompt based on mode
@@ -134,46 +805,125 @@ async def main(project_dir: Path, model: str, max_iterations: int = None):
                     prompt = get_coding_prompt()
                     mode_name = "Coding"
 
+                logger.info(f"Mode: {mode_name}")
+                logger.debug(f"Full prompt length: {len(prompt)} chars")
                 print(f"📝 Running {mode_name} agent\n")
 
-                # Run session with the same client (no reconnection needed)
-                status, response = await run_agent_session(client, prompt, project_dir)
+                # CRITICAL FIX: Create FRESH client for each iteration
+                # This prevents context accumulation that causes API 400 errors
+                print("Creating fresh Claude Code client for this session...")
+                logger.info(f"Creating new client for iteration {iteration}")
+                client_creation_start = time.time()
+                client = ClaudeSDKClient(options=client_options)
+                client_creation_duration = time.time() - client_creation_start
+                logger.info(f"Client created in {client_creation_duration:.2f}s")
+
+                # Run session with fresh client (context is clean)
+                async with client:
+                    logger.info("Connected to Claude Code CLI")
+                    status, response, health_status = await run_agent_session(client, prompt, project_dir, logger, session_id)
+
+                # Client is now closed, context is cleared
+
+                # Check if session is unhealthy and retry once if needed
+                retry_attempted = False
+                if not health_status['is_healthy'] and status != "error":
+                    logger.warning("Session appears unhealthy. Attempting one retry...")
+                    print("\n⚠️  Session appears to have stalled. Retrying once...\n")
+                    retry_attempted = True
+
+                    # Wait a bit before retry
+                    await asyncio.sleep(2)
+
+                    # Retry with a modified prompt emphasizing action AND a fresh client
+                    retry_prompt = prompt + "\n\nIMPORTANT: Please take concrete action using tools. Read files, write code, run commands, etc. Do not just provide suggestions."
+                    retry_session_id = f"{session_id}_retry"
+
+                    # Create another fresh client for the retry
+                    logger.info("Creating fresh client for retry attempt")
+                    retry_client = ClaudeSDKClient(options=client_options)
+                    async with retry_client:
+                        status, response, health_status = await run_agent_session(retry_client, retry_prompt, project_dir, logger, retry_session_id)
+
+                    if health_status['is_healthy']:
+                        logger.info("Retry succeeded - session now healthy")
+                        print("\n✅ Retry successful - session now healthy\n")
+                    else:
+                        logger.warning("Retry failed - session still unhealthy")
+                        print("\n⚠️  Retry failed - session still appears unhealthy\n")
+
+                # Log final health status to session metrics
+                session_metrics = {
+                    'status': status,
+                    'retry_attempted': retry_attempted,
+                    'is_healthy': health_status['is_healthy'],
+                    'tool_calls_count': health_status['tool_calls_count'],
+                    'response_length': health_status['response_length']
+                }
 
                 # Commit changes
                 print("\n📝 Committing changes...")
+                logger.debug("Committing and pushing changes to git")
                 commit_success, commit_msg = git_mgr.commit_and_push(
                     issues_completed=[],
                     issues_attempted=[],
-                    session_metrics={'status': status},
+                    session_metrics=session_metrics,
                     session_id=session_id
                 )
 
                 if commit_success:
+                    logger.info(f"Git commit successful: {commit_msg}")
                     print(f"✅ {commit_msg}")
                 else:
+                    logger.warning(f"Git commit failed or no changes: {commit_msg}")
                     print(f"⚠️  {commit_msg}")
 
                 # After first run, switch modes
                 if is_first_run:
                     is_first_run = False
                     init_marker.write_text(f"Initialized: {datetime.now().isoformat()}")
+                    logger.info("Initialization complete! Switching to coding agent mode.")
                     print("\n✅ Initialization complete! Next session will use coding agent.\n")
 
+                iteration_duration = time.time() - iteration_start_time
+                logger.info(f"ITERATION {iteration} COMPLETED in {iteration_duration:.2f}s")
+
             except Exception as e:
+                iteration_duration = time.time() - iteration_start_time
+                logger.error("="*80)
+                logger.error(f"EXCEPTION IN ITERATION {iteration} (duration: {iteration_duration:.2f}s)")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Error message: {str(e)}")
+                logger.error("Stack trace:")
+                logger.error(traceback.format_exc())
+                logger.error("="*80)
                 print(f"\n❌ Error: {e}")
                 print("Continuing to next iteration...\n")
 
             # Delay before next iteration
             if max_iterations is None or iteration < max_iterations:
+                logger.debug("Waiting 3 seconds before next session...")
                 print("\n⏸️  Waiting 3 seconds before next session...\n")
                 await asyncio.sleep(3)
 
     # Final summary (after client closes)
+    total_run_duration = time.time() - run_start_time
+    logger.info("="*80)
+    logger.info("AGENT RUN COMPLETE")
+    logger.info(f"Total duration: {total_run_duration:.2f}s ({total_run_duration/60:.2f} minutes)")
+    logger.info(f"Total iterations: {iteration}")
+    if iteration > 0:
+        logger.info(f"Average iteration time: {total_run_duration/iteration:.2f}s")
+    logger.info("="*80)
+
     print("\n" + "="*70)
     print("  AGENT RUN COMPLETE")
     print("="*70)
     print(integration.generate_progress_report())
     print("="*70 + "\n")
+
+    logger.info("Session log file written successfully")
+    logger.info("Shutting down logger")
 
 
 if __name__ == "__main__":
@@ -194,8 +944,9 @@ Examples:
     )
 
     parser.add_argument("--project-dir", type=Path, required=True, help="Project directory")
+    parser.add_argument("--project-name", type=str, default=None, help="Project spec name (looks in prompts/{project_name}/app_spec.txt)")
     parser.add_argument("--max-iterations", type=int, default=None, help="Max iterations (default: unlimited)")
-    parser.add_argument("--model", type=str, default="claude-sonnet-4-5-20250929", help="Claude model")
+    parser.add_argument("--model", type=str, default="claude-opus-4-5-20251101", help="Claude model")
 
     args = parser.parse_args()
 
@@ -225,4 +976,4 @@ Examples:
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # Run agent
-    asyncio.run(main(project_dir, args.model, args.max_iterations))
+    asyncio.run(main(project_dir, args.model, args.max_iterations, args.project_name))

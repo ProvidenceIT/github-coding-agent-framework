@@ -83,13 +83,13 @@ class EnhancedGitHubIntegration:
     def _load_project_data(self) -> Dict:
         """Load project metadata from file."""
         if self.project_file.exists():
-            with open(self.project_file, 'r') as f:
+            with open(self.project_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {}
 
     def _save_project_data(self):
         """Save project metadata to file."""
-        with open(self.project_file, 'w') as f:
+        with open(self.project_file, 'w', encoding='utf-8') as f:
             json.dump(self.project_data, f, indent=2)
 
     def calculate_progress(self, issues: List[Dict]) -> Dict[str, Any]:

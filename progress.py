@@ -28,7 +28,7 @@ def load_github_project_state(project_dir: Path) -> dict | None:
         return None
 
     try:
-        with open(marker_file, "r") as f:
+        with open(marker_file, "r", encoding='utf-8') as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return None

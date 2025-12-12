@@ -47,7 +47,52 @@ python autonomous_agent_fixed.py --project-dir ./my_project --max-iterations 5
 
 # Use a different model
 python autonomous_agent_fixed.py --project-dir ./my_project --model claude-opus-4-5-20251101
+
+# Use a specific project spec from your library
+python autonomous_agent_fixed.py --project-dir ./my_project --project-name my-saas-app
 ```
+
+## Managing Project Specifications
+
+The framework now supports organized project specifications stored in `prompts/{project_name}/` directories. This allows you to maintain a library of reusable project specs.
+
+See [PROJECT_SPECS_README.md](PROJECT_SPECS_README.md) for full documentation.
+
+### Quick Reference
+
+```bash
+# List all available project specs
+python manage_specs.py list
+
+# Create a new project spec
+python manage_specs.py create my-new-project
+
+# View a project spec
+python manage_specs.py view test_fresh
+
+# Edit a project spec
+python manage_specs.py edit my-new-project
+```
+
+### Running with a Specific Spec
+
+```bash
+# Use the test_fresh spec
+python autonomous_agent_fixed.py \
+  --project-dir ./generations/my-project \
+  --project-name test_fresh
+
+# The agent will:
+# 1. Copy prompts/test_fresh/app_spec.txt to project directory
+# 2. Create GitHub repo: ProvidenceIT/clevertech-providenceit-automation
+# 3. Create 50 issues from the spec
+# 4. Start building
+```
+
+The spec lookup order is:
+1. `prompts/{--project-name}/app_spec.txt` (if specified)
+2. `prompts/{directory-name}/app_spec.txt` (auto-detect)
+3. `prompts/app_spec.txt` (legacy fallback)
 
 ## Agent Features
 

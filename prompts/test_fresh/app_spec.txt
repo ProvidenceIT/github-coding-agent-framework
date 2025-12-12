@@ -1,0 +1,1524 @@
+# AI-POWERED MULTI-BRAND BUSINESS AUTOMATION PLATFORM
+# CleverTech.nl + ProvidenceIT.nl
+
+## PROJECT OVERVIEW
+
+### Vision
+Build an AI-powered business automation platform that consolidates all operations, knowledge, and business intelligence for CleverTech.nl and ProvidenceIT.nl (same company, different brands) into a unified system that leverages artificial intelligence to work smarter, scale efficiently, and enable full-time entrepreneurship for the two owners.
+
+### Core Value Proposition
+- **Unified Knowledge Base**: All ProvidenceIT repositories, customer data, products, and services in one searchable system
+- **AI-Powered Operations**: Claude API integration for email drafting, content generation, customer insights, code documentation
+- **Multi-Brand Management**: Single codebase managing two distinct brand identities (clevertech.nl, providenceit.nl)
+- **Business Intelligence**: Real-time dashboards combining GitHub metrics, CRM data, SEO/SEA performance, and analytics
+- **Automation First**: Reduce manual work by 80%+ through intelligent automation and AI assistance
+
+### Primary Users
+- Two company owners (sales, development, marketing, management roles)
+- Future team members as the company scales
+
+### Success Metrics
+- 80% reduction in manual reporting and administrative tasks
+- Sub-second response time for knowledge base queries
+- 50+ new top-10 keyword rankings within 3 months
+- 20% increase in organic traffic and conversions
+- 95% cost optimization through AI batch processing and caching
+
+---
+
+## TECHNOLOGY STACK
+
+### Frontend
+- **Framework**: Next.js 15 with App Router (React Server Components, Streaming SSR)
+- **UI Components**: shadcn/ui with Tailwind CSS (customizable, no vendor lock-in)
+- **Charts**: Recharts (React integration) + Apache ECharts (large datasets)
+- **State Management**: Zustand (simple, performant for dashboards)
+- **Data Fetching**: React Query / TanStack Query (server state management)
+- **Styling**: CSS Modules + CSS Variables (performance-optimized multi-brand theming)
+- **TypeScript**: Full type safety across application
+
+### Backend
+- **Runtime**: Node.js with Next.js API Routes
+- **APIs**: Hybrid GraphQL (complex queries) + REST (simple operations)
+- **Database**: PostgreSQL with Row-Level Security (multi-tenant data isolation)
+- **Cache**: Redis (distributed caching, session storage, real-time data)
+- **Vector Search**: Elasticsearch (GitHub code/docs indexing, semantic search)
+- **Queue System**: BullMQ with Redis (webhook processing, background jobs)
+- **Authentication**: Clerk or Auth0 (SSO across both brands)
+
+### AI & ML
+- **Primary LLM**: Claude Opus 4.5 (complex reasoning, code generation)
+- **Secondary LLM**: Claude Sonnet 4.5 (rapid tasks, scaled experiences)
+- **Embeddings**: OpenAI API or local models (Sentence Transformers)
+- **RAG Framework**: LlamaIndex or LangChain
+- **Transcription**: Otter.ai or AssemblyAI (meeting intelligence)
+
+### Content Management
+- **CMS**: Sanity (developer flexibility, real-time collaboration, workspaces per brand)
+- **Alternative**: Contentful (if enterprise features needed)
+- **Asset Management**: Sanity Asset Pipeline or Cloudinary
+
+### DevOps & Infrastructure
+- **Hosting**: Vercel (Edge functions, optimized Next.js deployment)
+- **Monorepo**: Turborepo (build caching, task orchestration)
+- **CI/CD**: GitHub Actions (automated testing, deployment)
+- **Monitoring**: Sentry (error tracking), Vercel Analytics (performance)
+- **Version Control**: Git + GitHub
+
+### External Integrations
+- **GitHub**: GraphQL + REST APIs (repository data, issues, PRs, discussions)
+- **SEO Tools**: SEMrush or SE Ranking (keyword tracking, site audits, backlinks)
+- **CRM**: Pipedrive or HubSpot (customer management, deal tracking)
+- **Analytics**: Google Analytics 4 (cross-domain tracking, brand segmentation)
+- **Search Console**: Google Search Console API (SEO monitoring, indexing)
+- **Google Ads**: Google Ads API (SEA automation, campaign optimization)
+- **Billing**: QuickBooks + Stripe (invoicing, payment processing)
+- **Communication**: Gmail/Outlook integration (email tracking, calendar sync)
+- **Automation**: Zapier or n8n (workflow automation, webhook management)
+
+---
+
+## ARCHITECTURE OVERVIEW
+
+### Multi-Brand Architecture Pattern
+- **Single Codebase**: Monorepo serving both clevertech.nl and providenceit.nl
+- **Domain Routing**: Separate .nl domains with middleware-based brand detection
+- **Shared Components**: UI component library with brand-specific theme overlays
+- **Design Tokens**: W3C-compliant tokens, Figma Extended Collections for multi-brand
+- **Content Strategy**: Shared core content, brand-specific messaging in separate Sanity workspaces
+- **Deployment**: Two Vercel projects from single monorepo, selective deployments via CI/CD
+
+### Data Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Frontend Layer                          │
+│  Next.js App Router + React Server Components              │
+│  shadcn/ui + Tailwind CSS (Multi-Brand Theming)            │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     API Gateway Layer                        │
+│  Next.js API Routes + GraphQL + REST Endpoints              │
+│  Brand Context Detection (Middleware)                       │
+│  Authentication & Authorization (Clerk/Auth0)               │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Business Logic Layer                        │
+│                                                             │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
+│  │   GitHub     │ │   SEO/SEA    │ │     CRM      │       │
+│  │  Integration │ │  Automation  │ │  Management  │       │
+│  └──────────────┘ └──────────────┘ └──────────────┘       │
+│                                                             │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
+│  │   Claude AI  │ │     RAG      │ │   Analytics  │       │
+│  │  Integration │ │    System    │ │   Service    │       │
+│  └──────────────┘ └──────────────┘ └──────────────┘       │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     Data Layer                               │
+│                                                             │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
+│  │  PostgreSQL  │ │ Elasticsearch│ │    Redis     │       │
+│  │  (RLS)       │ │  (Vector DB) │ │   (Cache)    │       │
+│  └──────────────┘ └──────────────┘ └──────────────┘       │
+│                                                             │
+│  ┌──────────────┐ ┌──────────────┐                        │
+│  │    Sanity    │ │    BullMQ    │                        │
+│  │    (CMS)     │ │   (Queues)   │                        │
+│  └──────────────┘ └──────────────┘                        │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  External Services                           │
+│                                                             │
+│  GitHub API • Google Analytics • Google Ads • SEMrush       │
+│  Pipedrive/HubSpot • QuickBooks • Stripe • Otter.ai        │
+│  Claude API • OpenAI API • Vercel • Cloudinary             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Security Architecture
+- **Multi-Layer Security**: OS-level sandbox + filesystem restrictions + allowlist approach
+- **Row-Level Security**: PostgreSQL RLS for multi-tenant data isolation
+- **API Key Management**: Environment variables + AWS Secrets Manager or Vercel Secrets
+- **Authentication**: JWT tokens + SSO + 2FA support
+- **HTTPS Everywhere**: TLS 1.3 for all communications
+- **RBAC**: Role-based access control (Owners, Future Team Members, Viewers)
+- **Audit Logging**: All data access and modifications tracked
+- **Rate Limiting**: API request throttling and DDoS protection
+
+---
+
+## FEATURES (50+ Detailed Features)
+
+### 1. MULTI-BRAND WEBSITE MANAGEMENT
+
+#### 1.1 Dual Brand Website Hosting
+**Description**: Single Next.js codebase serving both clevertech.nl and providenceit.nl with separate domains
+**Implementation**:
+- Middleware detects incoming domain (clevertech.nl vs providenceit.nl)
+- Environmental variables map to unique brand IDs
+- Rewrites requests to brand-specific routes
+- Shared component library with theme overlays
+**Tech**: Next.js 15 App Router, Vercel multi-project deployment
+**Priority**: Critical
+**Dependencies**: None
+
+#### 1.2 Multi-Brand Design System
+**Description**: Centralized design tokens with brand-specific color palettes, typography, logos, and styling
+**Implementation**:
+- W3C design tokens specification for cross-platform token generation
+- Figma Extended Collections for multi-brand variable management
+- CSS Variables for runtime theme switching (no JavaScript overhead)
+- Separate token files: `tokens-clevertech.json`, `tokens-providenceit.json`
+**Tech**: CSS Modules + CSS Variables, Figma Tokens Studio
+**Priority**: Critical
+**Dependencies**: 1.1
+
+#### 1.3 Shared Component Library
+**Description**: Reusable UI components (buttons, cards, forms, navigation) used across both brands
+**Implementation**:
+- shadcn/ui base components copied into `/components/ui`
+- Brand-aware wrapper components using theme context
+- TypeScript interfaces for component props
+- Storybook for component documentation
+**Tech**: React, shadcn/ui, Tailwind CSS, TypeScript
+**Priority**: High
+**Dependencies**: 1.2
+
+#### 1.4 Brand-Specific Landing Pages
+**Description**: Separate home pages, about pages, services pages for each brand
+**Implementation**:
+- Sanity CMS stores brand-specific page content
+- Next.js dynamic routes: `/[brand]/page`
+- Server-side rendering for SEO optimization
+- Shared page templates with content injection
+**Tech**: Next.js, Sanity CMS, React Server Components
+**Priority**: High
+**Dependencies**: 1.1, Sanity integration
+
+#### 1.5 Multi-Brand SEO Optimization
+**Description**: Separate meta tags, schema markup, sitemaps for each brand
+**Implementation**:
+- Dynamic meta tag generation based on brand context
+- Brand-specific sitemap.xml generation
+- Separate robots.txt configurations
+- Schema.org markup for local business (Dutch market)
+**Tech**: next-seo, Next.js metadata API
+**Priority**: High
+**Dependencies**: 1.1
+
+#### 1.6 Cross-Brand Navigation
+**Description**: Easy switching between brand sites for admin users
+**Implementation**:
+- Admin toolbar overlay (visible only to authenticated owners)
+- "Switch Brand" dropdown in header
+- Maintains session context across brands
+- Link to unified admin dashboard
+**Tech**: React Context, Clerk/Auth0
+**Priority**: Medium
+**Dependencies**: Authentication system
+
+### 2. GITHUB REPOSITORY INTELLIGENCE
+
+#### 2.1 ProvidenceIT Repository Indexing
+**Description**: Automated scraping and indexing of all ProvidenceIT private repositories
+**Implementation**:
+- GitHub App with fine-grained permissions (Contents, Metadata, Issues, PRs)
+- Initial bulk fetch via GraphQL API (faster for nested data)
+- Extract: code, commits, issues, pull requests, discussions, README, wikis
+- Incremental updates via webhooks (push, PR, issue events)
+**Tech**: Octokit.js, GitHub GraphQL API, BullMQ for queue processing
+**Priority**: Critical
+**Dependencies**: None
+**Rate Limiting**: 15,000 req/hour with GitHub App
+
+#### 2.2 Code Search & Semantic Search
+**Description**: Fast full-text and semantic search across all repository code
+**Implementation**:
+- Elasticsearch indexes repository contents with metadata
+- AST-based chunking for code files (better than fixed-size for code)
+- OpenAI embeddings for semantic search (k-NN vector search)
+- Hybrid search: BM25 (keyword) + vector similarity
+- Search results show file path, line numbers, code context
+**Tech**: Elasticsearch, OpenAI Embeddings API, AST parsers
+**Priority**: Critical
+**Dependencies**: 2.1
+
+#### 2.3 Repository Documentation Hub
+**Description**: Centralized access to all README files, wikis, and documentation
+**Implementation**:
+- Parse Markdown from repositories to structured content
+- Categorize by project and topic
+- Link to live repository source
+- Syntax highlighting for code examples
+**Tech**: Remark (Markdown parsing), Prism.js (syntax highlighting)
+**Priority**: High
+**Dependencies**: 2.1
+
+#### 2.4 Code Snippet Library
+**Description**: Extracted, categorized, and searchable code snippets from all repositories
+**Implementation**:
+- AST parsing identifies reusable functions, classes, utilities
+- Categorization by language, purpose, complexity
+- "Copy to Clipboard" functionality
+- Link back to source file and line number
+**Tech**: Tree-sitter (AST parsing), Elasticsearch
+**Priority**: Medium
+**Dependencies**: 2.2
+
+#### 2.5 Commit & Change Tracking
+**Description**: Historical view of all commits, branches, and changes across repositories
+**Implementation**:
+- Store commit metadata: author, timestamp, message, diff stats
+- Visualize commit activity over time (heatmaps, graphs)
+- Filter by repository, author, date range
+- Link to GitHub for full diff view
+**Tech**: GitHub REST API, Recharts for visualization
+**Priority**: Medium
+**Dependencies**: 2.1
+
+#### 2.6 Pull Request Analytics
+**Description**: Insights into PR velocity, review times, merge rates
+**Implementation**:
+- Track PR lifecycle: opened → reviewed → merged/closed
+- Calculate average review time, time to merge
+- Identify bottlenecks in review process
+- Dashboard showing open PR count, age distribution
+**Tech**: GitHub GraphQL API, PostgreSQL for analytics
+**Priority**: Medium
+**Dependencies**: 2.1
+
+#### 2.7 Issue Tracking Integration
+**Description**: All GitHub issues viewable and manageable within platform
+**Implementation**:
+- Sync issues with labels, assignees, milestones, comments
+- Create, update, close issues from dashboard
+- Filter and search across all repositories
+- Link issues to customers or projects in CRM
+**Tech**: GitHub REST API, Real-time sync via webhooks
+**Priority**: High
+**Dependencies**: 2.1, CRM integration
+
+#### 2.8 Automated Repository Backups
+**Description**: Regular backups of all repository data beyond GitHub's retention
+**Implementation**:
+- Weekly full backup of code, issues, wikis, discussions
+- Store in S3-compatible object storage
+- Backup metadata in PostgreSQL
+- Restoration testing quarterly
+**Tech**: AWS S3 or Backblaze B2, GitHub API
+**Priority**: Medium
+**Dependencies**: 2.1
+
+### 3. SEO & SEA AUTOMATION
+
+#### 3.1 Centralized SEO Dashboard
+**Description**: Unified view of SEO performance for both brands
+**Implementation**:
+- Google Search Console API integration
+- Display: organic traffic, keyword rankings, CTR, impressions
+- Brand-specific filters and comparisons
+- Anomaly detection (sudden ranking drops, traffic spikes)
+**Tech**: Google Search Console API, Looker Studio or custom dashboard
+**Priority**: Critical
+**Dependencies**: None
+
+#### 3.2 Automated Keyword Rank Tracking
+**Description**: Daily tracking of keyword positions for both brands
+**Implementation**:
+- SEMrush or SE Ranking API integration
+- Track 100+ keywords per brand
+- Historical position tracking and trend visualization
+- Alert on ranking changes (± 5 positions)
+**Tech**: SEMrush Position Tracking API, PostgreSQL time-series data
+**Priority**: High
+**Dependencies**: SEMrush/SE Ranking subscription
+
+#### 3.3 Technical SEO Monitoring
+**Description**: Automated site audits detecting broken links, missing tags, crawl errors
+**Implementation**:
+- Weekly Screaming Frog or Sitebulb crawls
+- Monitor: 404s, broken links, duplicate content, missing meta
+- Core Web Vitals tracking (LCP, INP, CLS)
+- Automated alerts on critical issues
+**Tech**: Screaming Frog API, Google PageSpeed Insights API
+**Priority**: High
+**Dependencies**: None
+
+#### 3.4 AI-Powered Content Generation (SEO)
+**Description**: Claude-assisted blog articles, meta descriptions, FAQ schema
+**Implementation**:
+- Claude Projects per brand with brand voice guidelines
+- Generate SEO-optimized long-form articles (1500+ words)
+- Automated meta description creation for all pages
+- FAQ schema generation from common customer questions
+- Human editorial review workflow before publishing
+**Tech**: Claude Opus 4.5 API, Sanity CMS workflow
+**Priority**: High
+**Dependencies**: Claude API integration
+
+#### 3.5 Backlink Monitoring & Outreach
+**Description**: Track backlinks and automate link-building outreach
+**Implementation**:
+- Ahrefs or SEMrush backlink monitoring (daily updates)
+- Detect new/lost backlinks with email alerts
+- Claude-generated personalized outreach emails
+- Track outreach campaigns and success rates
+**Tech**: Ahrefs API, Claude API for email generation, BullMQ for scheduling
+**Priority**: Medium
+**Dependencies**: 3.2, Claude integration
+
+#### 3.6 Competitive SEO Analysis
+**Description**: Monitor top 5-10 competitors for each brand
+**Implementation**:
+- Track competitor keyword rankings
+- Compare backlink profiles
+- Content gap analysis (keywords competitors rank for)
+- Automated monthly competitor reports
+**Tech**: SEMrush Competitor Analysis API, Visualping for site changes
+**Priority**: Medium
+**Dependencies**: 3.2
+
+#### 3.7 Local SEO for Netherlands
+**Description**: Optimize for .nl domains and Dutch market
+**Implementation**:
+- Google Business Profile optimization for both brands
+- NAP (Name, Address, Phone) consistency across directories
+- Dutch directory citations (Telefoonboek.nl, Bedrijvengids, Drimble)
+- Local schema markup (LocalBusiness, Organization)
+**Tech**: Manual setup + automated monitoring
+**Priority**: High
+**Dependencies**: None
+
+#### 3.8 Google Ads (SEA) Automation
+**Description**: Automated bidding, campaign management, and optimization
+**Implementation**:
+- Google Ads API integration (Smart Bidding with AI)
+- Performance Max campaigns across all Google channels
+- Automated budget allocation based on ROI
+- Weekly performance reports
+**Tech**: Google Ads API, Claude for ad copy generation
+**Priority**: High
+**Dependencies**: Google Ads account
+
+#### 3.9 SEO/SEA Reporting Automation
+**Description**: Weekly/monthly automated reports emailed to stakeholders
+**Implementation**:
+- Looker Studio dashboards with scheduled PDF delivery
+- Key metrics: traffic, rankings, conversions, ad spend, ROI
+- YoY and MoM comparison charts
+- Automated insights generation via Claude
+**Tech**: Looker Studio, Google Data Studio API, Claude API
+**Priority**: Medium
+**Dependencies**: 3.1, 3.8
+
+### 4. CLAUDE AI INTEGRATION
+
+#### 4.1 Company Knowledge Base Q&A
+**Description**: Claude-powered assistant answering questions about repos, customers, products
+**Implementation**:
+- RAG system with Elasticsearch vector search
+- User asks question → retrieve top-k relevant documents → Claude generates answer
+- Citations to source (repo file, CRM record, docs page)
+- Conversational memory for follow-up questions
+**Tech**: Claude Opus 4.5, Elasticsearch, LlamaIndex/LangChain
+**Priority**: Critical
+**Dependencies**: 2.2, Elasticsearch setup
+
+#### 4.2 Automated Email Drafting
+**Description**: Claude generates personalized emails for sales, support, follow-ups
+**Implementation**:
+- Templates per scenario (cold outreach, proposal, follow-up)
+- CRM data integration (customer name, history, deal stage)
+- Claude generates draft, user reviews/edits before sending
+- Track open rates and replies for optimization
+**Tech**: Claude Sonnet 4.5, Pipedrive/HubSpot API
+**Priority**: High
+**Dependencies**: CRM integration
+
+#### 4.3 Meeting Summarization & Action Items
+**Description**: Automatically transcribe meetings and generate summaries
+**Implementation**:
+- Otter.ai or AssemblyAI transcribes meeting audio
+- Claude processes transcript → summary, key points, action items
+- Auto-create tasks in CRM linked to contacts
+- Email summary to participants
+**Tech**: Otter.ai API, Claude API, CRM task automation
+**Priority**: High
+**Dependencies**: CRM integration
+
+#### 4.4 Customer Insights & Sentiment Analysis
+**Description**: Analyze customer communications for sentiment and insights
+**Implementation**:
+- Batch process email threads, support tickets, meeting notes
+- Claude identifies: sentiment (positive/neutral/negative), pain points, opportunities
+- Customer health scoring based on engagement
+- Proactive churn alerts
+**Tech**: Claude API, PostgreSQL for storage
+**Priority**: Medium
+**Dependencies**: CRM data access
+
+#### 4.5 Code Documentation Generation
+**Description**: Automatically document undocumented code from repositories
+**Implementation**:
+- Identify functions/classes without docstrings
+- Claude generates clear documentation with examples
+- Review workflow before committing to repository
+- Schedule: weekly documentation sprints
+**Tech**: Claude Opus 4.5, GitHub API for commits
+**Priority**: Low
+**Dependencies**: 2.1
+
+#### 4.6 Content Marketing Automation
+**Description**: Generate social media posts, newsletters, case studies
+**Implementation**:
+- Claude Projects with brand-specific content calendars
+- Generate LinkedIn posts, Twitter threads, newsletters
+- Reuse blog content for multi-channel distribution
+- Schedule via Buffer or Hootsuite integration
+**Tech**: Claude API, social media APIs
+**Priority**: Medium
+**Dependencies**: Content strategy
+
+#### 4.7 Proposal & Quote Generation
+**Description**: AI-assisted proposal and quote creation
+**Implementation**:
+- Select products/services from catalog
+- Claude generates proposal narrative tailored to customer
+- Automatic pricing calculations
+- Export to PDF with brand design
+**Tech**: Claude API, CRM integration, PDF generation (jsPDF)
+**Priority**: Medium
+**Dependencies**: CRM product catalog
+
+#### 4.8 Lead Qualification & Scoring
+**Description**: AI-powered lead analysis and prioritization
+**Implementation**:
+- Define Ideal Customer Profile (ICP) criteria
+- Claude analyzes new leads against ICP
+- Scores leads 1-100 based on fit and intent
+- Auto-assign to owner based on score/type
+**Tech**: Claude API, CRM webhooks
+**Priority**: Medium
+**Dependencies**: CRM integration
+
+### 5. BUSINESS INTELLIGENCE DASHBOARD
+
+#### 5.1 Executive Dashboard (High-Level KPIs)
+**Description**: Single-screen overview of critical business metrics
+**Implementation**:
+- 5-7 key metrics: MRR, organic traffic, deal pipeline value, customer count
+- Comparison: MoM, YoY growth percentages
+- Visual hierarchy (large numbers for primary, small for supporting)
+- Real-time updates via WebSockets
+**Tech**: Next.js, Recharts, WebSockets
+**Priority**: Critical
+**Dependencies**: Data integrations
+
+#### 5.2 Sales & Revenue Dashboard
+**Description**: Detailed sales performance tracking
+**Implementation**:
+- Metrics: pipeline value, win rate, avg deal size, sales cycle length
+- Visual pipeline (drag-drop Kanban view)
+- Revenue forecasting based on deal probabilities
+- Individual and team performance comparison
+**Tech**: React Beautiful DnD (Kanban), Recharts
+**Priority**: High
+**Dependencies**: CRM integration
+
+#### 5.3 SEO Performance Dashboard
+**Description**: In-depth SEO analytics and trends
+**Implementation**:
+- Organic traffic trends with annotations (algorithm updates)
+- Top 100 keyword rankings with movement indicators
+- Backlink growth and quality metrics
+- Click-through rates by page and position
+**Tech**: Google Search Console API, SEMrush API, Apache ECharts
+**Priority**: High
+**Dependencies**: 3.1, 3.2
+
+#### 5.4 GitHub Activity Dashboard
+**Description**: Repository health and development activity
+**Implementation**:
+- Commit frequency and volume charts
+- Open issues and PRs count with aging distribution
+- Contributor activity heatmaps
+- Code review velocity metrics
+**Tech**: GitHub API, D3.js for heatmaps
+**Priority**: Medium
+**Dependencies**: 2.1
+
+#### 5.5 Customer Analytics Dashboard
+**Description**: Customer health, churn risk, lifetime value
+**Implementation**:
+- Customer segmentation (by value, engagement, risk)
+- Churn prediction models (AI-powered)
+- Customer Lifetime Value (CLV) calculations
+- Support ticket trends and resolution times
+**Tech**: PostgreSQL analytics, Claude for predictions, Recharts
+**Priority**: Medium
+**Dependencies**: CRM data
+
+#### 5.6 Financial Dashboard
+**Description**: Revenue, expenses, cash flow tracking
+**Implementation**:
+- QuickBooks integration for real-time financial data
+- Revenue by brand, service type, customer segment
+- Expense tracking and budget vs actual
+- Profit margin calculations
+**Tech**: QuickBooks API, Chart.js
+**Priority**: Medium
+**Dependencies**: QuickBooks integration
+
+#### 5.7 Real-Time Notifications & Alerts
+**Description**: Instant alerts for critical events
+**Implementation**:
+- WebSocket or SSE for real-time push notifications
+- Alert triggers: ranking drops, deal won, new lead, GitHub issue, payment received
+- Configurable alert rules per user
+- Toast notifications in UI + optional email/Slack
+**Tech**: WebSockets (Socket.io), Redis Pub/Sub, React Context
+**Priority**: High
+**Dependencies**: All data sources
+
+#### 5.8 Dashboard Customization & Widgets
+**Description**: Drag-and-drop customizable dashboard layouts
+**Implementation**:
+- React Grid Layout for draggable widgets
+- Widget library: line charts, bar charts, KPI cards, tables, maps
+- Save custom layouts per user
+- Export dashboard data to CSV/Excel/PDF
+**Tech**: React Grid Layout, Papa Parse (CSV), xlsx library
+**Priority**: Medium
+**Dependencies**: 5.1-5.6
+
+#### 5.9 Mobile-Responsive Dashboards
+**Description**: Full dashboard access on mobile devices
+**Implementation**:
+- Tailwind responsive utilities (sm, md, lg breakpoints)
+- Touch-optimized interactions
+- Progressive Web App (PWA) for offline access
+- Simplified mobile layouts prioritizing key metrics
+**Tech**: Tailwind CSS, Next.js PWA plugin
+**Priority**: High
+**Dependencies**: 5.1-5.6
+
+### 6. CRM & CUSTOMER MANAGEMENT
+
+#### 6.1 Customer/Client Database
+**Description**: Centralized contact management for all clients and prospects
+**Implementation**:
+- Contact records: name, email, phone, company, website, address
+- Custom fields and tags for segmentation
+- Contact timeline showing all interactions
+- Link contacts to deals, projects, communications
+**Tech**: PostgreSQL, Pipedrive or HubSpot integration
+**Priority**: Critical
+**Dependencies**: None
+
+#### 6.2 Deal/Opportunity Pipeline
+**Description**: Visual sales pipeline with customizable stages
+**Implementation**:
+- Pipeline stages: Lead → Qualified → Proposal → Negotiation → Won/Lost
+- Drag-and-drop deals between stages
+- Deal value, probability, expected close date
+- Automated deal progression based on activities
+**Tech**: React Beautiful DnD, PostgreSQL
+**Priority**: Critical
+**Dependencies**: 6.1
+
+#### 6.3 Communication Tracking (Email, Calls, Meetings)
+**Description**: Log all customer communications automatically
+**Implementation**:
+- Gmail/Outlook integration for automatic email logging
+- Manual call logging with notes and duration
+- Calendar integration for meeting history
+- Attachment storage linked to contacts
+**Tech**: Gmail API, Outlook API, Google Calendar API
+**Priority**: High
+**Dependencies**: 6.1
+
+#### 6.4 Product/Service Catalog
+**Description**: Complete catalog of all offerings with pricing
+**Implementation**:
+- Product database: name, description, SKU, category, pricing tiers
+- Multiple pricing models (one-time, recurring, usage-based)
+- Product bundles and packages
+- Easy search and filter for quoting
+**Tech**: PostgreSQL, Algolia for search
+**Priority**: High
+**Dependencies**: None
+
+#### 6.5 Quote & Proposal Builder
+**Description**: Generate professional quotes with electronic signatures
+**Implementation**:
+- Template-based quote creation with brand styling
+- Drag-drop products from catalog
+- Automatic price calculations with discounts and taxes
+- Electronic signature integration (DocuSign or native)
+- PDF export and email delivery
+**Tech**: jsPDF or react-pdf, DocuSign API (optional)
+**Priority**: High
+**Dependencies**: 6.4
+
+#### 6.6 Invoice Generation & Payment Processing
+**Description**: Automated invoicing from closed deals with payment tracking
+**Implementation**:
+- Auto-generate invoices when deal reaches "Won" stage
+- QuickBooks sync for accounting records
+- Stripe "Pay Now" links embedded in invoices
+- Payment status tracking within CRM
+- Automated payment reminders
+**Tech**: QuickBooks API, Stripe API, email automation
+**Priority**: High
+**Dependencies**: 6.2, QuickBooks integration
+
+#### 6.7 Project Tracking & Task Management
+**Description**: Manage client projects and deliverables
+**Implementation**:
+- Project creation linked to customer and deal
+- Task assignments, milestones, deadlines
+- Time tracking for billable hours
+- Project status dashboard (on track, at risk, delayed)
+**Tech**: PostgreSQL, React Kanban boards
+**Priority**: Medium
+**Dependencies**: 6.1
+
+#### 6.8 CRM Reporting & Analytics
+**Description**: Sales performance reports and customer insights
+**Implementation**:
+- Reports: win/loss rate, sales cycle length, revenue by source, customer acquisition cost
+- Forecasting based on pipeline and historical data
+- Automated weekly/monthly sales reports
+- Export to PDF/Excel for stakeholders
+**Tech**: PostgreSQL analytics queries, Recharts, PDF generation
+**Priority**: Medium
+**Dependencies**: 6.2
+
+#### 6.9 Mobile CRM Access
+**Description**: Full CRM functionality on mobile devices
+**Implementation**:
+- Responsive web app accessible on iOS/Android
+- Add notes, log calls, update deals on-the-go
+- Push notifications for deal updates and tasks
+- Offline mode with background sync
+**Tech**: Next.js PWA, Service Workers, Push API
+**Priority**: Medium
+**Dependencies**: 6.1-6.8
+
+### 7. CONTENT MANAGEMENT SYSTEM (SANITY)
+
+#### 7.1 Multi-Brand Content Workspaces
+**Description**: Separate Sanity workspaces for clevertech.nl and providenceit.nl
+**Implementation**:
+- Two Sanity datasets: "clevertech" and "providenceit"
+- Shared schemas for common content types
+- Brand-specific content collections for unique messaging
+- Real-time collaboration for both owners
+**Tech**: Sanity CMS, Sanity Datasets API
+**Priority**: High
+**Dependencies**: None
+
+#### 7.2 Blog & Article Management
+**Description**: Content creation and publishing for both brands
+**Implementation**:
+- Rich text editor with Markdown support
+- SEO fields: meta title, description, keywords, og:image
+- Category and tag taxonomy
+- Scheduled publishing
+- Draft/Review/Published workflow
+**Tech**: Sanity Portable Text, Next.js ISR for static generation
+**Priority**: High
+**Dependencies**: 7.1
+
+#### 7.3 Page Builder for Landing Pages
+**Description**: No-code editor for creating custom landing pages
+**Implementation**:
+- Modular blocks: hero, features, testimonials, CTA, pricing
+- Drag-and-drop block arrangement
+- Live preview before publishing
+- A/B testing variants (optional)
+**Tech**: Sanity Visual Editing, Next.js dynamic routes
+**Priority**: Medium
+**Dependencies**: 7.1
+
+#### 7.4 Media Asset Management
+**Description**: Centralized storage and organization of images, videos, documents
+**Implementation**:
+- Upload images with automatic optimization (WebP, responsive sizes)
+- Tagging and categorization for easy search
+- Brand-specific asset folders
+- CDN delivery via Cloudinary or Sanity Asset Pipeline
+**Tech**: Sanity Assets, Cloudinary (optional)
+**Priority**: Medium
+**Dependencies**: 7.1
+
+#### 7.5 Content Localization (Dutch/English)
+**Description**: Multi-language support for international audience
+**Implementation**:
+- Field-level localization in Sanity schemas
+- Language switcher in frontend
+- Separate content per locale
+- Automatic hreflang tag generation for SEO
+**Tech**: Sanity Localization, Next.js i18n
+**Priority**: Low (future enhancement)
+**Dependencies**: 7.1
+
+### 8. AUTHENTICATION & AUTHORIZATION
+
+#### 8.1 Single Sign-On (SSO) Across Brands
+**Description**: One login works for both clevertech.nl and providenceit.nl admin areas
+**Implementation**:
+- Centralized auth provider (Clerk or Auth0)
+- JWT tokens with brand context
+- Automatic session refresh
+- Remember me functionality
+**Tech**: Clerk or Auth0, JWT, HTTP-only cookies
+**Priority**: Critical
+**Dependencies**: None
+
+#### 8.2 Role-Based Access Control (RBAC)
+**Description**: Different permission levels for owners and future team members
+**Implementation**:
+- Roles: Owner (full access), Developer (code, repos), Sales (CRM, quotes), Marketing (SEO, content)
+- Granular permissions per resource (read, write, delete)
+- UI elements conditionally rendered based on role
+- Database Row-Level Security (RLS) enforcement
+**Tech**: Clerk Roles, PostgreSQL RLS policies
+**Priority**: High
+**Dependencies**: 8.1
+
+#### 8.3 Multi-Factor Authentication (MFA)
+**Description**: Enhanced security with 2FA via SMS or authenticator app
+**Implementation**:
+- TOTP-based authentication (Google Authenticator, Authy)
+- Backup codes for recovery
+- Enforced MFA for owner accounts
+- Optional for other roles
+**Tech**: Clerk MFA or Auth0 MFA
+**Priority**: High
+**Dependencies**: 8.1
+
+#### 8.4 Audit Logging
+**Description**: Track all user actions for security and compliance
+**Implementation**:
+- Log: user, action, resource, timestamp, IP address, user agent
+- Searchable audit trail in admin interface
+- Retention: 1 year minimum
+- Export audit logs for compliance
+**Tech**: PostgreSQL audit table, Clerk webhooks
+**Priority**: Medium
+**Dependencies**: 8.1
+
+### 9. ANALYTICS & TRACKING
+
+#### 9.1 Google Analytics 4 Integration
+**Description**: Comprehensive web analytics for both brands
+**Implementation**:
+- Separate GA4 properties or shared property with brand dimension
+- Cross-domain tracking between clevertech.nl and providenceit.nl
+- Event tracking: button clicks, form submissions, downloads
+- E-commerce tracking (if applicable)
+**Tech**: Google Analytics 4, GTM (Google Tag Manager)
+**Priority**: High
+**Dependencies**: None
+
+#### 9.2 Conversion Tracking & Funnels
+**Description**: Track user journeys from landing to conversion
+**Implementation**:
+- Define conversion events: form submission, quote request, payment
+- Funnel visualization showing drop-off points
+- Attribution modeling (first-touch, last-touch, multi-touch)
+- A/B test tracking for landing pages
+**Tech**: GA4 Funnels, Custom Events API
+**Priority**: High
+**Dependencies**: 9.1
+
+#### 9.3 Heatmaps & Session Recordings
+**Description**: Visual analytics showing user behavior on pages
+**Implementation**:
+- Hotjar or Microsoft Clarity integration
+- Heatmaps showing clicks, scrolls, mouse movement
+- Session recordings for UX debugging
+- Privacy-compliant (anonymize sensitive data)
+**Tech**: Hotjar or Microsoft Clarity (free)
+**Priority**: Low
+**Dependencies**: None
+
+#### 9.4 Performance Monitoring (Core Web Vitals)
+**Description**: Track page speed and user experience metrics
+**Implementation**:
+- Monitor LCP (Largest Contentful Paint), INP (Interaction to Next Paint), CLS (Cumulative Layout Shift)
+- Real-user monitoring (RUM) for actual user experience
+- Automated alerts on performance degradation
+- Vercel Analytics integration
+**Tech**: Vercel Analytics, Google PageSpeed Insights API
+**Priority**: Medium
+**Dependencies**: None
+
+### 10. AUTOMATION & WORKFLOWS
+
+#### 10.1 Webhook Processing Queue
+**Description**: Reliable processing of webhooks from external services
+**Implementation**:
+- BullMQ job queue with Redis backend
+- Immediate 200 response to webhook sender
+- Background processing of webhook data
+- Automatic retry mechanism (3 attempts with exponential backoff)
+- Dead letter queue for failed jobs
+**Tech**: BullMQ, Redis, Express.js webhook endpoints
+**Priority**: High
+**Dependencies**: Redis setup
+
+#### 10.2 Scheduled Jobs & Cron Tasks
+**Description**: Automated background tasks running on schedule
+**Implementation**:
+- Daily: GitHub repository sync, SEO rank checks
+- Weekly: Site audits, backlink monitoring, reports generation
+- Monthly: Invoice generation, customer health scoring
+- Use Vercel Cron or separate cron service
+**Tech**: Vercel Cron or node-cron, BullMQ for job processing
+**Priority**: High
+**Dependencies**: 10.1
+
+#### 10.3 Zapier/n8n Integration
+**Description**: No-code/low-code workflow automation
+**Implementation**:
+- Trigger automations on CRM events (new deal, status change)
+- Connect to services without native APIs
+- Example workflows:
+  - New CRM deal → Create Google Drive folder
+  - Form submission → Add to email list
+  - Invoice paid → Send thank you email
+**Tech**: Zapier (paid) or n8n (self-hosted, open-source)
+**Priority**: Medium
+**Dependencies**: CRM webhooks
+
+#### 10.4 Email Automation Sequences
+**Description**: Drip campaigns and automated follow-ups
+**Implementation**:
+- Welcome sequence for new leads
+- Abandoned quote follow-up (3, 7, 14 days)
+- Post-project feedback request
+- Monthly newsletter automation
+**Tech**: HubSpot Email Automation or Mailchimp, CRM triggers
+**Priority**: Medium
+**Dependencies**: CRM integration
+
+### 11. DEPLOYMENT & DEVOPS
+
+#### 11.1 Vercel Production Deployment
+**Description**: Automated deployments on git push to main branch
+**Implementation**:
+- Two Vercel projects linked to monorepo
+- Automatic preview deployments for PR branches
+- Environment variables per project (brand-specific)
+- Edge functions for server-side logic
+**Tech**: Vercel, GitHub integration
+**Priority**: Critical
+**Dependencies**: None
+
+#### 11.2 Staging Environment
+**Description**: Pre-production testing environment
+**Implementation**:
+- Separate Vercel project for staging.clevertech.nl, staging.providenceit.nl
+- Automatic deployment from `develop` branch
+- Use test API keys and sandbox accounts
+- Database: separate staging database or anonymized production clone
+**Tech**: Vercel, PostgreSQL staging database
+**Priority**: High
+**Dependencies**: None
+
+#### 11.3 Continuous Integration (CI)
+**Description**: Automated testing on every commit
+**Implementation**:
+- GitHub Actions workflow runs on PR creation
+- Steps: Install deps → Lint → Type check → Unit tests → Build
+- Block merge if CI fails
+- Run E2E tests nightly (Playwright)
+**Tech**: GitHub Actions, Vitest, Playwright
+**Priority**: High
+**Dependencies**: Test suite
+
+#### 11.4 Monitoring & Error Tracking
+**Description**: Real-time error detection and alerting
+**Implementation**:
+- Sentry integration for frontend and backend errors
+- Error grouping and deduplication
+- Source maps for production debugging
+- Slack/email alerts for critical errors
+- Performance tracking (slow queries, API latency)
+**Tech**: Sentry, Vercel Observability
+**Priority**: High
+**Dependencies**: None
+
+#### 11.5 Database Backups & Disaster Recovery
+**Description**: Automated database backups with tested recovery process
+**Implementation**:
+- Daily automated PostgreSQL backups (pg_dump)
+- Weekly full backups stored in S3
+- Point-in-time recovery capability
+- Quarterly disaster recovery drills
+- RTO (Recovery Time Objective): 4 hours, RPO (Recovery Point Objective): 1 day
+**Tech**: PostgreSQL, AWS S3 or Backblaze B2, pg_dump
+**Priority**: High
+**Dependencies**: PostgreSQL setup
+
+### 12. SEARCH & DISCOVERY
+
+#### 12.1 Global Search (Omnibox)
+**Description**: Single search bar for searching across all data types
+**Implementation**:
+- Search: customers, deals, repos, code, docs, products, content
+- Elasticsearch powers search with relevance scoring
+- Keyboard shortcut (Cmd+K / Ctrl+K) to open search
+- Recent searches and suggestions
+**Tech**: Elasticsearch, React Autocomplete, Algolia (alternative)
+**Priority**: High
+**Dependencies**: Elasticsearch setup
+
+#### 12.2 Smart Filters & Segmentation
+**Description**: Advanced filtering and saved filter sets
+**Implementation**:
+- Filter UI: date ranges, dropdown selects, multi-select tags
+- Combine filters with AND/OR logic
+- Save frequently-used filter combinations
+- Share filter URLs with team
+**Tech**: React Query for URL state, PostgreSQL for storage
+**Priority**: Medium
+**Dependencies**: Database setup
+
+### 13. COMMUNICATION & COLLABORATION
+
+#### 13.1 Internal Team Chat
+**Description**: Real-time messaging for owners (future team expansion)
+**Implementation**:
+- Channels per brand/topic (clevertech-sales, providenceit-dev)
+- Direct messages
+- File sharing and link previews
+- @mentions and notifications
+**Tech**: Stream Chat API or Slack integration
+**Priority**: Low
+**Dependencies**: None
+
+#### 13.2 Activity Feed
+**Description**: Real-time feed of all platform activity
+**Implementation**:
+- Events: new deals, GitHub commits, blog published, ranking changes
+- Filterable by event type and brand
+- Link to related resources
+- Mark as read functionality
+**Tech**: PostgreSQL events table, WebSockets for real-time
+**Priority**: Medium
+**Dependencies**: WebSocket setup
+
+### 14. BILLING & SUBSCRIPTIONS
+
+#### 14.1 Stripe Payment Processing
+**Description**: Accept online payments for quotes and invoices
+**Implementation**:
+- Stripe Checkout for one-time payments
+- Stripe Customer Portal for subscription management (if offering SaaS products)
+- Support for EUR (primary) and other currencies
+- Automatic payment confirmations and receipts
+**Tech**: Stripe API, Stripe Webhooks
+**Priority**: High
+**Dependencies**: None
+
+#### 14.2 Recurring Billing & Subscriptions
+**Description**: Manage recurring revenue for retainer clients
+**Implementation**:
+- Create subscription products in Stripe
+- Automatic monthly/annual billing
+- Proration for mid-cycle changes
+- Dunning management (failed payment retries)
+**Tech**: Stripe Subscriptions API, Stripe Billing
+**Priority**: Medium
+**Dependencies**: 14.1
+
+### 15. DATA EXPORT & REPORTING
+
+#### 15.1 CSV/Excel Data Export
+**Description**: Export any data table to CSV or Excel format
+**Implementation**:
+- Export button on all data tables (customers, deals, keywords, etc.)
+- Large exports processed in background (BullMQ job)
+- Email download link when ready
+- Include filters applied to export
+**Tech**: Papa Parse (CSV), xlsx library (Excel), BullMQ
+**Priority**: Medium
+**Dependencies**: 10.1
+
+#### 15.2 PDF Report Generation
+**Description**: Generate branded PDF reports for clients or internal use
+**Implementation**:
+- Report templates: SEO performance, sales pipeline, project status
+- Include charts, tables, and commentary
+- Brand-specific styling (logo, colors, fonts)
+- Schedule automated delivery (weekly/monthly)
+**Tech**: Puppeteer (headless Chrome), react-pdf, or jsPDF
+**Priority**: Medium
+**Dependencies**: None
+
+### 16. PERFORMANCE OPTIMIZATION
+
+#### 16.1 Code Splitting & Lazy Loading
+**Description**: Optimize bundle size and initial load time
+**Implementation**:
+- Next.js automatic code splitting per page
+- Dynamic imports for heavy components (charts, code editors)
+- Lazy load images with next/image
+- Disable SSR for client-heavy components
+**Tech**: Next.js dynamic imports, next/image
+**Priority**: High
+**Dependencies**: None
+
+#### 16.2 Caching Strategy
+**Description**: Multi-layer caching for fast responses
+**Implementation**:
+- Browser caching: static assets (1 year TTL)
+- React Query: client-side data caching (stale-while-revalidate)
+- Redis: server-side data caching (5 min - 1 hour TTL)
+- CDN: Vercel Edge Network for static and dynamic content
+**Tech**: Redis, React Query, HTTP caching headers
+**Priority**: High
+**Dependencies**: Redis setup
+
+#### 16.3 Database Query Optimization
+**Description**: Ensure fast database queries
+**Implementation**:
+- Index all foreign keys and frequently-queried columns
+- Use EXPLAIN ANALYZE to identify slow queries
+- Implement database connection pooling (PgBouncer)
+- Materialized views for complex analytics queries
+**Tech**: PostgreSQL indexes, PgBouncer
+**Priority**: Medium
+**Dependencies**: PostgreSQL setup
+
+#### 16.4 Image Optimization
+**Description**: Serve optimized images for fast loading
+**Implementation**:
+- next/image for automatic WebP/AVIF conversion
+- Responsive image sizes (srcset)
+- Lazy loading for below-the-fold images
+- Cloudinary or Sanity Asset Pipeline for dynamic resizing
+**Tech**: next/image, Cloudinary (optional)
+**Priority**: High
+**Dependencies**: None
+
+---
+
+## IMPLEMENTATION PHASES
+
+### Phase 1: Foundation (Months 1-2)
+**Goal**: Multi-brand website + basic dashboards + authentication
+- Multi-brand website with design system (Features 1.1-1.5)
+- Authentication and RBAC (Features 8.1-8.3)
+- Executive dashboard with placeholder data (Feature 5.1)
+- Vercel deployment and staging (Features 11.1-11.2)
+- **Success Criteria**: Both websites live, owners can log in with SSO
+
+### Phase 2: GitHub Intelligence (Month 3)
+**Goal**: Complete GitHub repository indexing and search
+- Repository indexing and scraping (Feature 2.1)
+- Code and semantic search (Feature 2.2)
+- Documentation hub (Feature 2.3)
+- GitHub activity dashboard (Feature 5.4)
+- **Success Criteria**: All repos indexed, sub-second search, usable dashboard
+
+### Phase 3: CRM & Business Operations (Month 4)
+**Goal**: Customer management and sales pipeline
+- Customer database and pipeline (Features 6.1-6.2)
+- Communication tracking (Feature 6.3)
+- Product catalog and quoting (Features 6.4-6.5)
+- Pipedrive or HubSpot integration
+- Sales dashboard (Feature 5.2)
+- **Success Criteria**: CRM in daily use, quotes generated, deals tracked
+
+### Phase 4: SEO/SEA Automation (Month 5)
+**Goal**: Marketing automation and optimization
+- SEO dashboard and rank tracking (Features 3.1-3.2)
+- Technical SEO monitoring (Feature 3.3)
+- Google Ads integration (Feature 3.8)
+- SEO performance dashboard (Feature 5.3)
+- **Success Criteria**: Daily rank tracking, automated audits, ads optimized
+
+### Phase 5: Claude AI Integration (Month 6)
+**Goal**: AI-powered productivity and insights
+- Knowledge base Q&A (Feature 4.1)
+- Automated email drafting (Feature 4.2)
+- Meeting summarization (Feature 4.3)
+- AI content generation for SEO (Feature 3.4)
+- **Success Criteria**: 50% time savings on emails, meeting notes automated
+
+### Phase 6: Advanced Features & Optimization (Months 7-8)
+**Goal**: Polish, performance, and scaling features
+- Remaining CRM features (Features 6.6-6.9)
+- Advanced dashboards and customization (Features 5.5-5.9)
+- Automation workflows (Features 10.1-10.4)
+- Performance optimization (Features 16.1-16.4)
+- **Success Criteria**: Platform performs <500ms page loads, all integrations live
+
+---
+
+## DATA MODEL (Key Entities)
+
+### Brand
+- id (UUID)
+- name (clevertech | providenceit)
+- domain (clevertech.nl | providenceit.nl)
+- theme_tokens (JSON: colors, fonts, logo paths)
+- settings (JSON: SEO, analytics IDs, contact info)
+
+### User
+- id (UUID)
+- email
+- name
+- role (owner | developer | sales | marketing | viewer)
+- brands (array of brand IDs, for multi-brand access)
+- auth_provider_id (Clerk/Auth0 user ID)
+- last_login
+- created_at
+
+### Customer
+- id (UUID)
+- brand_id (FK to Brand)
+- name
+- email
+- phone
+- company
+- website
+- address (JSON)
+- tags (array)
+- created_at
+- owner_id (FK to User - assigned owner)
+
+### Deal
+- id (UUID)
+- brand_id (FK to Brand)
+- customer_id (FK to Customer)
+- title
+- value (decimal)
+- currency (EUR default)
+- stage (lead | qualified | proposal | negotiation | won | lost)
+- probability (0-100)
+- expected_close_date
+- actual_close_date
+- lost_reason
+- created_at
+- owner_id (FK to User)
+
+### Product
+- id (UUID)
+- brand_id (FK to Brand, null for shared products)
+- name
+- description
+- sku
+- category
+- price_model (one_time | recurring | usage_based)
+- price (decimal)
+- currency
+- active (boolean)
+- created_at
+
+### Quote
+- id (UUID)
+- brand_id (FK to Brand)
+- customer_id (FK to Customer)
+- deal_id (FK to Deal, optional)
+- quote_number (auto-generated)
+- line_items (JSON array of products with quantities)
+- subtotal
+- discount (percentage or fixed)
+- tax (percentage)
+- total
+- status (draft | sent | accepted | rejected | expired)
+- valid_until
+- created_at
+- created_by (FK to User)
+
+### Repository
+- id (UUID)
+- github_id (int)
+- name
+- full_name (org/repo)
+- description
+- url
+- private (boolean)
+- language
+- stars
+- forks
+- last_commit_at
+- indexed_at
+- created_at
+
+### CodeSnippet
+- id (UUID)
+- repository_id (FK to Repository)
+- file_path
+- start_line
+- end_line
+- code (text)
+- language
+- function_name
+- category (utility | component | api | config | etc)
+- embedding (vector for semantic search)
+- indexed_at
+
+### Keyword
+- id (UUID)
+- brand_id (FK to Brand)
+- keyword (text)
+- search_volume
+- difficulty
+- current_position
+- target_position
+- url (page ranking for this keyword)
+- created_at
+
+### KeywordRanking
+- id (UUID)
+- keyword_id (FK to Keyword)
+- position
+- url
+- date
+- search_engine (google.nl default)
+
+### BlogPost
+- id (UUID)
+- brand_id (FK to Brand)
+- title
+- slug
+- content (rich text / portable text)
+- excerpt
+- featured_image_url
+- author_id (FK to User)
+- status (draft | published | archived)
+- published_at
+- meta_title
+- meta_description
+- keywords (array)
+- created_at
+- updated_at
+
+### Activity
+- id (UUID)
+- user_id (FK to User)
+- brand_id (FK to Brand, optional)
+- type (deal_created | repo_updated | blog_published | ranking_change | etc)
+- resource_type (deal | customer | repository | keyword | etc)
+- resource_id
+- description (auto-generated summary)
+- metadata (JSON)
+- created_at
+
+---
+
+## API INTEGRATIONS SUMMARY
+
+| Service | Purpose | API | Auth Method | Rate Limits |
+|---------|---------|-----|-------------|-------------|
+| GitHub | Repository data, issues, PRs | GraphQL + REST | GitHub App | 15,000 req/hr |
+| Google Search Console | SEO performance | REST | OAuth 2.0 | 2,000 req/day |
+| Google Analytics 4 | Web analytics | REST | OAuth 2.0 | 10,000 req/day |
+| Google Ads | SEA campaigns | REST | OAuth 2.0 | Varies by tier |
+| SEMrush | Keyword tracking, backlinks | REST | API Key | Varies by plan |
+| Claude (Anthropic) | AI text generation | REST | API Key | Model-specific |
+| OpenAI | Embeddings for search | REST | API Key | Tier-based |
+| Pipedrive/HubSpot | CRM data | REST | OAuth 2.0 | 5,000 req/hr (Pipedrive) |
+| QuickBooks | Accounting data | REST | OAuth 2.0 | 500 req/min |
+| Stripe | Payment processing | REST | API Key | 100 req/sec |
+| Otter.ai | Meeting transcription | REST | API Key | Plan-dependent |
+| Sanity | Content management | GraphQL | Token | Unlimited |
+| Vercel | Deployment, edge functions | REST | Token | N/A (platform) |
+
+---
+
+## SECURITY CONSIDERATIONS
+
+### Data Protection
+- All sensitive data encrypted at rest (AES-256) and in transit (TLS 1.3)
+- API keys stored in Vercel Secrets or AWS Secrets Manager
+- Database connection strings never committed to git
+- Regular security audits and dependency updates (Dependabot)
+
+### Access Control
+- Row-Level Security (RLS) in PostgreSQL enforcing brand and user access
+- JWT tokens with short expiration (1 hour), refresh tokens for sessions
+- MFA required for all owner accounts
+- IP allowlisting for admin endpoints (optional)
+
+### Data Privacy (GDPR Compliance)
+- Cookie consent banner for analytics
+- Data retention policies (customer data: 7 years, analytics: 1 year)
+- Right to be forgotten: delete customer data on request
+- Data export functionality for customers
+- Privacy policy and terms of service pages
+
+### Incident Response
+- Sentry for real-time error tracking and alerting
+- Audit logs for security event investigation
+- Automated backups with tested restore procedures
+- On-call rotation for critical issues (once team expands)
+
+---
+
+## COST ESTIMATES (Monthly)
+
+### SaaS Subscriptions
+- **Hosting (Vercel)**: $20/month (Pro plan)
+- **Database (Vercel Postgres or Supabase)**: $25/month
+- **Redis (Upstash)**: $10/month
+- **CRM (Pipedrive Professional)**: $98/month (2 users)
+- **QuickBooks**: $30/month
+- **SEMrush or SE Ranking**: $129/month (SEMrush Lite)
+- **Sanity CMS**: $15/month (Team plan)
+- **Auth (Clerk)**: $25/month (Pro plan)
+- **Monitoring (Sentry)**: $26/month (Team plan)
+- **Email (Mailgun)**: $15/month
+- **Total SaaS**: ~$393/month
+
+### API Usage (Estimated)
+- **Claude API**: $100-300/month (depending on usage)
+- **OpenAI Embeddings**: $20/month
+- **Otter.ai**: $20/month (2 users)
+- **Stripe fees**: 2.9% + $0.30 per transaction (revenue-dependent)
+- **Total APIs**: ~$140-340/month
+
+### Grand Total: ~$533-733/month
+
+*Note: Costs will scale with usage. Heavy Claude API usage can increase costs. Optimize with caching and batch processing.*
+
+---
+
+## SUCCESS CRITERIA & KPIs
+
+### User Adoption (Months 1-3)
+- Both owners log in daily (5+ days/week)
+- 80%+ of customer communications logged in CRM
+- All sales quotes generated through platform
+- All blog posts created via Sanity CMS
+
+### Efficiency Gains (Months 3-6)
+- 80% reduction in manual reporting time (automated dashboards)
+- 50% reduction in email drafting time (Claude assistance)
+- 100% of repository knowledge searchable in <2 seconds
+- 90% of repetitive tasks automated (invoicing, rank tracking, backups)
+
+### Business Growth (Months 6-12)
+- 20% increase in organic traffic (both brands combined)
+- 50+ new top-10 keyword rankings
+- 15% improvement in sales cycle time (faster quoting, follow-ups)
+- 10% increase in quote-to-close conversion rate
+
+### Technical Performance
+- Page load time: <500ms (LCP < 1.5s)
+- Uptime: 99.9%+ (max 43 min downtime/month)
+- Search response time: <100ms for 95th percentile
+- Zero critical security vulnerabilities
+
+---
+
+## RISKS & MITIGATIONS
+
+### Technical Risks
+**Risk**: API rate limiting from external services
+**Mitigation**: Implement caching, respect rate limits, queue requests, use webhooks over polling
+
+**Risk**: Data loss or corruption
+**Mitigation**: Automated daily backups, point-in-time recovery, quarterly disaster recovery drills
+
+**Risk**: Performance degradation with data growth
+**Mitigation**: Database indexing, query optimization, caching layers, horizontal scaling plan
+
+### Business Risks
+**Risk**: High AI API costs
+**Mitigation**: Prompt caching (90% cost reduction), batch processing, use Haiku for simple tasks, monitor usage
+
+**Risk**: Low user adoption
+**Mitigation**: Iterative development with owner feedback, intuitive UX, mobile access, training documentation
+
+**Risk**: Integration failures (GitHub, CRM, SEO tools)
+**Mitigation**: Robust error handling, retry logic, fallback mechanisms, monitoring and alerts
+
+### Operational Risks
+**Risk**: Only 2 owners, no redundancy
+**Mitigation**: Comprehensive documentation, automated systems, plan to hire first employee by month 9
+
+**Risk**: Vendor lock-in
+**Mitigation**: Use open standards where possible, own data in PostgreSQL, export capabilities
+
+---
+
+## FUTURE ENHANCEMENTS (Post-Launch)
+
+### Advanced AI Features
+- AI-powered customer support chatbot embedded on brand websites
+- Predictive analytics for churn, upsell opportunities
+- Automated A/B testing for landing pages and ad copy
+- Voice interface for dashboard queries (Alexa/Google Assistant)
+
+### Collaboration & Team Features
+- Full team chat with channels and threads
+- Collaborative document editing (real-time)
+- Video conferencing integration (Zoom, Google Meet embeds)
+- Project management with Gantt charts and dependencies
+
+### E-Commerce Capabilities
+- Full online store for productized services
+- Subscription management portal for customers
+- Affiliate/referral program tracking
+- Customer self-service portal (invoices, support tickets)
+
+### Advanced SEO/SEA
+- Automated content calendar based on search trends
+- Dynamic landing page generation for long-tail keywords
+- Competitor SERP feature tracking (featured snippets, people also ask)
+- Local SEO citation building automation
+
+### Internationalization
+- Support for multiple languages beyond Dutch/English
+- Multi-currency support
+- Region-specific content and SEO strategies
+
+---
+
+## TECHNICAL CONSTRAINTS & ASSUMPTIONS
+
+### Assumptions
+- ProvidenceIT has <100 private repositories (indexing time: <1 day)
+- Customer database size: <10,000 contacts (manageable with PostgreSQL)
+- Traffic: <100,000 pageviews/month initially (Vercel free tier sufficient short-term)
+- Both owners have technical proficiency to use admin interfaces
+
+### Constraints
+- Budget: $500-750/month for SaaS and APIs
+- Development time: 6-8 months for MVP with all core features
+- No dedicated DevOps engineer (rely on Vercel's managed infrastructure)
+- Netherlands-focused (Google.nl, .nl domains, Dutch language priority)
+
+### Dependencies
+- GitHub API access (requires GitHub App approval)
+- Google Workspace or similar for email/calendar integration
+- Existing ProvidenceIT GitHub organization with private repos
+- Domain ownership of clevertech.nl and providenceit.nl
+
+---
+
+## CONCLUSION
+
+This platform represents a comprehensive, AI-first approach to business automation for CleverTech and ProvidenceIT. By consolidating all company knowledge, customer data, marketing efforts, and business intelligence into a single unified system powered by Claude AI and modern web technologies, the two owners will be able to:
+
+1. **Work Smarter**: 80% reduction in manual tasks through automation
+2. **Make Better Decisions**: Real-time dashboards and AI-powered insights
+3. **Scale Efficiently**: Single codebase managing two brands, ready for team growth
+4. **Increase Revenue**: Optimized SEO/SEA, faster sales cycles, better customer management
+5. **Achieve Entrepreneurship Goals**: Free up time by automating operations, enabling focus on growth
+
+The phased implementation approach ensures continuous value delivery, starting with foundational features and building toward advanced AI capabilities. With a modern, scalable tech stack and comprehensive automation, this platform will serve as the operational backbone for years to come.
+
+**Next Steps**: Review this specification, prioritize features based on immediate business needs, and begin Phase 1 development.
