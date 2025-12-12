@@ -5,276 +5,264 @@ This is a FRESH context window - you have no memory of previous sessions.
 
 GitHub Issues are your source of truth for what needs to be built and completed.
 
-**⚡ CRITICAL:** You have 50 turns MAX. Don't waste them on exploration.
+**CRITICAL TURN MANAGEMENT:** You have 50 turns MAX.
+- Turns 1-5: Orientation
+- Turns 6-35: Implementation (pick ONE issue, implement it, CLOSE it)
+- Turns 36-45: Second issue OR refinement
+- Turns 46-50: RESERVED for META update and git push
 
 ---
 
-## ⚠️ MANDATORY ACTIONS (NON-NEGOTIABLE!)
+## MANDATORY SESSION OUTCOMES (NON-NEGOTIABLE!)
 
-**EVERY session MUST do these things, NO EXCEPTIONS:**
+**Every session MUST achieve ALL of these:**
 
-1. **CLOSE at least 1 issue** - Run `gh issue close <number>`
-2. **UPDATE the META issue** - Add a comment with session progress
-3. **COMMIT and PUSH** - `git add -A && git commit && git push`
+1. **CLOSE at least 1 issue** - `gh issue close <number>` (not just work on it - CLOSE it!)
+2. **UPDATE the META issue** - Add comment showing progress
+3. **PUSH to remote** - `git pull --rebase && git add -A && git commit && git push`
 
-If you skip ANY of these, the session is a FAILURE.
-
----
-
-## MANDATORY SESSION GOAL
-
-**Every session MUST close at least 1 issue.**
-
-If you end a session without closing any issues, the session has failed.
-Close issues by: `gh issue close <number>` after verifying the feature works.
-
-**The `gh issue close` command is MANDATORY** - just marking checkboxes is NOT enough!
+**Sessions that fail ANY of these are FAILURES.**
 
 ---
 
-## STEP 1: QUICK ORIENTATION (MAX 5 TURNS!)
+## TURN BUDGET BREAKDOWN
 
-**Run these commands ONCE:**
+| Turns | Phase | Actions |
+|-------|-------|---------|
+| 1-5 | Orientation | Check status, find META issue, list open issues |
+| 6-10 | Select & Plan | Pick ONE achievable issue, understand requirements |
+| 11-30 | Implement | Write code, test it works |
+| 31-35 | **CLOSE ISSUE** | Comment and `gh issue close` - DO THIS IMMEDIATELY! |
+| 36-45 | Optional: Second Issue | Only if first issue is CLOSED |
+| 46-50 | **MANDATORY FINISH** | Update META issue, git commit/push |
+
+**IMPORTANT:** When you reach turn 30-35, STOP CODING and CLOSE the issue!
+
+---
+
+## PHASE 1: QUICK ORIENTATION (Turns 1-5)
+
+Run these commands in parallel:
+
 ```bash
-# 1. Check location and files
+# All in one command block for efficiency
 pwd && ls -la
-
-# 2. Read spec if needed
-cat app_spec.txt | head -100
-
-# 3. Check GitHub status
 gh issue list --state all --json number,state | jq '[group_by(.state)[] | {state: .[0].state, count: length}]'
-
-# 4. Find META issue
 gh issue list --search "[META]" --json number,title --limit 1
-```
-
-**If no META issue exists:** Create it FIRST using the template from initializer prompt, then continue.
-
-**STOP exploring after 5 turns.** Begin implementation.
-
----
-
-## STEP 2: CHECK FOR EXISTING ISSUES
-
-```bash
-# Get priority:urgent issues first
 gh issue list --state open --label "priority:urgent" --json number,title --limit 5
-
-# Then priority:high
 gh issue list --state open --label "priority:high" --json number,title --limit 5
 ```
 
----
+**No META issue?** Create one immediately using the initializer template.
 
-## STEP 3: START DEV SERVER
-
-```bash
-# Start server if not running
-if [ -f init.sh ]; then
-  ./init.sh
-else
-  npm run dev > logs/dev-server.log 2>&1 &
-fi
-
-# Wait and verify
-sleep 5 && curl -I http://localhost:3000 2>&1 | head -5
-```
+**STOP exploring after turn 5.** Pick an issue and start implementing.
 
 ---
 
-## STEP 4: PICK AN ISSUE AND IMPLEMENT
+## PHASE 2: PICK ONE ACHIEVABLE ISSUE (Turns 6-10)
 
-**Select ONE issue** to work on:
+**Selection criteria (in order):**
+1. `priority:urgent` issues first
+2. `priority:high` issues second
+3. Issues that can be completed in ~20 turns
+4. Avoid issues that need external services you can't test
+
 ```bash
+# View the issue you're selecting
 gh issue view <ISSUE_NUMBER>
 ```
 
-**Implement the feature:**
-1. Read the issue's acceptance criteria
-2. Write the code
-3. Test it works via browser (Puppeteer)
-4. Fix any bugs found
+**Announce your choice:** "I'm working on issue #X: [title]"
 
 ---
 
-## STEP 5: VERIFY AND CLOSE THE ISSUE
+## PHASE 3: IMPLEMENT (Turns 11-30)
 
-**⚠️ CRITICAL - DO NOT SKIP THIS STEP! This is the most important step!**
+1. **Start dev server** (if needed):
+   ```bash
+   npm run dev > logs/dev-server.log 2>&1 &
+   sleep 5 && curl -I http://localhost:3000
+   ```
 
-After implementation is complete and verified:
+2. **Write the code** - Read files, edit files, create components
+
+3. **Test it works** - Use curl or Puppeteer to verify
+
+**HARD STOP AT TURN 30:** Even if not perfect, move to closing!
+
+---
+
+## PHASE 4: CLOSE THE ISSUE (Turns 31-35) - CRITICAL!
+
+**THIS IS THE MOST IMPORTANT PHASE. DO NOT SKIP!**
+
+Even if the implementation isn't 100% complete, CLOSE the issue if it's mostly working.
+A closed issue with 80% done is better than an open issue that's 100% done.
 
 ```bash
-# 1. Add implementation comment
+# Step 1: Add implementation comment
 gh issue comment <ISSUE_NUMBER> --body "$(cat <<'EOF'
-## Implementation Complete ✅
+## Implementation Complete
 
 ### Changes Made
-- [List files changed]
+- [Brief list of changes]
 
-### Verification
-- Tested via browser automation
-- All acceptance criteria met
+### Status
+- [Working/Partial/Needs follow-up]
+
+### Notes
+- [Any issues for next session]
 EOF
 )"
 
-# 2. CLOSE THE ISSUE (MANDATORY! THIS IS NOT OPTIONAL!)
+# Step 2: CLOSE THE ISSUE - THIS IS MANDATORY!
 gh issue close <ISSUE_NUMBER>
 
-# 3. VERIFY it's closed
+# Step 3: Verify closure
 gh issue view <ISSUE_NUMBER> --json state -q '.state'
-# Must show: "CLOSED"
+# MUST show: "CLOSED"
 
-echo "✅ Issue #<ISSUE_NUMBER> CLOSED"
+echo "Issue #<ISSUE_NUMBER> is now CLOSED"
 ```
 
-**🚨 CRITICAL:** Running `gh issue close <number>` is MANDATORY!
-- Just commenting is NOT closing
-- Just marking checkboxes is NOT closing
-- The issue must show state: "CLOSED" to count as progress
+**DO NOT proceed to Phase 5 until the issue is CLOSED!**
 
 ---
 
-## STEP 6: UPDATE META ISSUE (MANDATORY EVERY SESSION!)
+## PHASE 5: OPTIONAL SECOND ISSUE (Turns 36-45)
 
-**⚠️ This step is MANDATORY even if you closed 0 issues!**
+**Only if:**
+- First issue is CLOSED (verified state=CLOSED)
+- You have 10+ turns remaining
+- There's a small issue you can complete quickly
+
+Otherwise, skip to Phase 6.
+
+---
+
+## PHASE 6: MANDATORY FINISH (Turns 46-50)
+
+**These steps are REQUIRED before session ends!**
+
+### Step 6A: Update META Issue
 
 ```bash
-# Find the META issue
+# Find META issue
 META_ISSUE=$(gh issue list --search "[META]" --json number -q '.[0].number')
 
-# If no META issue found, search differently
-if [ -z "$META_ISSUE" ]; then
-  META_ISSUE=$(gh issue list --json number,title | jq -r '.[] | select(.title | contains("META") or contains("Progress") or contains("Tracker")) | .number' | head -1)
-fi
-
-# Get current counts
+# Get counts
 OPEN=$(gh issue list --state open --json number | jq 'length')
 CLOSED=$(gh issue list --state closed --json number | jq 'length')
 TOTAL=$((OPEN + CLOSED))
+PERCENT=$((CLOSED * 100 / TOTAL))
 
-# Update META issue with session progress
+# Post update
 gh issue comment $META_ISSUE --body "$(cat <<EOF
-## 📊 Session Update - $(date '+%Y-%m-%d %H:%M')
+## Session Update - $(date '+%Y-%m-%d %H:%M')
 
-### Progress This Session
-- Issues Closed: [list closed issue numbers, or "None" if 0]
-- Issues Worked On: [list issue numbers]
+### This Session
+- **Issues Closed:** #[list the numbers you closed]
+- **Issues Worked On:** #[list numbers]
 
-### Current Project Status
-- **Total Issues**: $TOTAL
-- **Open**: $OPEN
-- **Closed**: $CLOSED
-- **Progress**: $((CLOSED * 100 / TOTAL))%
+### Project Status
+- Total: $TOTAL | Open: $OPEN | Closed: $CLOSED | Progress: $PERCENT%
 
-### What Was Done
-- [Brief summary of work]
+### Summary
+- [One line about what you accomplished]
 
-### Blockers/Notes for Next Session
-- [Any issues or context needed]
-
-### Next Priority
-- [What the next agent should work on]
+### Next Session Should
+- [Priority for next agent]
 EOF
 )"
 
-echo "✅ META issue #$META_ISSUE updated"
+echo "META issue #$META_ISSUE updated"
 ```
 
-**🚨 Why META updates matter:**
-- Other agents need this to know what's been done
-- This is how project progress is tracked across sessions
-- Without updates, agents waste time re-discovering context
-
----
-
-## STEP 7: COMMIT AND PUSH
-
-**⚠️ ALWAYS pull before push to avoid rejection!**
+### Step 6B: Git Commit and Push
 
 ```bash
-# 1. Pull latest changes first (other agents may have pushed)
+# ALWAYS pull first!
 git pull --rebase origin main
 
-# 2. Stage all changes
+# Stage and commit
 git add -A
+git commit -m "feat: [brief description]
 
-# 3. Commit with descriptive message
-git commit -m "Implement [feature] - closes #<ISSUE_NUMBER>
+- Closes #<ISSUE_NUMBER>
 
-- [Brief description of changes]
-- Closes #<ISSUE_NUMBER>"
+Generated by autonomous coding agent"
 
-# 4. Push (will auto-retry with pull if rejected)
+# Push
 git push origin main
 
-# 5. Verify push succeeded
-git log --oneline -1
-echo "✅ Changes pushed to remote"
+# Verify
+git status
+echo "Changes pushed to remote"
 ```
 
 ---
 
-## CRITICAL RULES
+## EMERGENCY: If Running Low on Turns
 
-**MUST DO (NON-NEGOTIABLE!):**
-- ✅ Close at least 1 issue per session (via `gh issue close <number>`)
-- ✅ Update META issue with session progress comment
-- ✅ Test features through browser (Puppeteer) before closing
-- ✅ Pull before push (`git pull --rebase origin main`)
-- ✅ Commit and push changes before ending
+If you're at turn 40+ and haven't closed an issue or updated META:
 
-**MUST NOT:**
-- ❌ Spend more than 5 turns on exploration
-- ❌ End session without closing any issues
-- ❌ Mark issues closed without running `gh issue close`
-- ❌ Skip the META issue update
-- ❌ Push without pulling first
+**STOP ALL IMPLEMENTATION WORK IMMEDIATELY!**
 
----
+1. Close whatever issue you were working on (even if incomplete):
+   ```bash
+   gh issue comment <NUM> --body "Partial implementation - next session will continue"
+   gh issue close <NUM>
+   ```
 
-## IF YOU GET STUCK
+2. Update META issue with progress
 
-If you hit errors or bugs that block progress:
+3. Commit and push
 
-1. **Don't spend all turns debugging** - if stuck for 10+ turns, pivot
-2. **Try a different issue** - pick something simpler
-3. **Document the blocker** in META issue comment
-4. **Still close SOMETHING** - even a simple issue counts
-
-**The goal is forward progress every session.**
+**An incomplete issue that's closed > a complete issue that's still open**
 
 ---
 
-## 🚨 FINAL SESSION CHECKLIST (RUN BEFORE ENDING!)
+## SESSION SUCCESS CHECKLIST
 
-**Execute this verification before your session ends:**
+Before your session ends, verify:
 
 ```bash
-echo "=== SESSION END CHECKLIST ==="
+echo "=== FINAL VERIFICATION ==="
 
-# 1. Check issues closed this session
-echo "📋 Recently closed issues:"
-gh issue list --state closed --json number,title,closedAt --limit 5
+# 1. At least one issue closed?
+CLOSED_RECENTLY=$(gh issue list --state closed --json number,closedAt | jq '[.[] | select(.closedAt > (now - 3600 | todate))] | length')
+echo "Issues closed this hour: $CLOSED_RECENTLY"
+[ "$CLOSED_RECENTLY" -ge 1 ] && echo "PASS: Issue closed" || echo "FAIL: No issue closed!"
 
-# 2. Verify META issue was updated
-META_ISSUE=$(gh issue list --search "[META]" --json number -q '.[0].number')
-echo "📊 META issue #$META_ISSUE last comments:"
-gh issue view $META_ISSUE --comments | tail -20
+# 2. META issue updated?
+META=$(gh issue list --search "[META]" --json number -q '.[0].number')
+echo "META issue: #$META"
 
-# 3. Verify git is pushed
-echo "📤 Git status:"
-git status
-git log --oneline -3
+# 3. Git status clean?
+git status --short
+[ -z "$(git status --porcelain)" ] && echo "PASS: Git clean" || echo "FAIL: Uncommitted changes!"
 
-echo "=== CHECKLIST COMPLETE ==="
+echo "=== END VERIFICATION ==="
 ```
 
-**Before ending, verify ALL of these:**
-- [ ] At least 1 issue closed - run `gh issue list --state closed` to confirm
-- [ ] META issue updated with session comment
-- [ ] Code committed and pushed - run `git status` shows clean
-- [ ] Dev server still running / app in working state
+---
 
-**🚨 Sessions that close 0 issues are FAILURES.**
-**🚨 Sessions that don't update META issue are FAILURES.**
+## WHAT COUNTS AS SUCCESS
+
+| Outcome | Status |
+|---------|--------|
+| 1+ issues closed, META updated, git pushed | SUCCESS |
+| 1+ issues closed, META updated, push failed (but tried) | PARTIAL SUCCESS |
+| 0 issues closed but META updated and pushed | FAILURE |
+| No META update | FAILURE |
+| No git push attempt | FAILURE |
+
+---
+
+## CRITICAL REMINDERS
+
+- **Closing issues is more important than perfect code**
+- **Update META every session, no exceptions**
+- **Always pull before push**
+- **Reserve turns 46-50 for mandatory finish steps**
+- **If stuck on an issue for 15+ turns, close it as incomplete and move on**

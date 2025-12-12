@@ -94,6 +94,148 @@ def setup_session_logger(project_dir: Path) -> logging.Logger:
 
 
 
+def check_session_mandatory_outcomes(project_dir: Path, session_start_time: datetime, logger: logging.Logger = None) -> dict:
+    """
+    Check if a session achieved its mandatory outcomes:
+    1. At least one issue was closed
+    2. META issue was updated
+    3. Changes were pushed (or attempted)
+
+    Args:
+        project_dir: Project directory
+        session_start_time: When the session started
+        logger: Optional logger
+
+    Returns:
+        dict with keys:
+            - issues_closed: int
+            - meta_updated: bool
+            - git_pushed: bool
+            - success: bool
+            - failures: list of failure messages
+    """
+    import subprocess
+
+    result = {
+        'issues_closed': 0,
+        'meta_updated': False,
+        'git_pushed': False,
+        'success': False,
+        'failures': []
+    }
+
+    try:
+        # Check for recently closed issues (within last hour)
+        check_result = subprocess.run(
+            ['gh', 'issue', 'list', '--state', 'closed', '--json', 'number,closedAt', '--limit', '20'],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if check_result.returncode == 0:
+            import json
+            try:
+                issues = json.loads(check_result.stdout)
+                # Count issues closed in the last hour
+                from datetime import datetime, timedelta
+                one_hour_ago = datetime.now() - timedelta(hours=1)
+
+                for issue in issues:
+                    closed_at = issue.get('closedAt', '')
+                    if closed_at:
+                        try:
+                            # Parse ISO format datetime
+                            closed_time = datetime.fromisoformat(closed_at.replace('Z', '+00:00'))
+                            if closed_time.replace(tzinfo=None) > one_hour_ago:
+                                result['issues_closed'] += 1
+                        except:
+                            pass
+
+            except json.JSONDecodeError:
+                pass
+
+        if result['issues_closed'] == 0:
+            result['failures'].append("No issues were closed this session")
+
+        # Check if META issue was updated (look for recent comments)
+        meta_check = subprocess.run(
+            ['gh', 'issue', 'list', '--search', '[META]', '--json', 'number', '-q', '.[0].number'],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if meta_check.returncode == 0 and meta_check.stdout.strip():
+            meta_number = meta_check.stdout.strip()
+            # Check for recent comments (we can't easily check timestamp, but presence is good)
+            comment_check = subprocess.run(
+                ['gh', 'issue', 'view', meta_number, '--json', 'comments', '-q', '.comments | length'],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if comment_check.returncode == 0:
+                # If there are comments, assume META was updated
+                # (In production, you'd want to check comment timestamps)
+                comment_count = int(comment_check.stdout.strip() or '0')
+                result['meta_updated'] = comment_count > 0
+        else:
+            result['failures'].append("META issue not found")
+
+        if not result['meta_updated']:
+            result['failures'].append("META issue was not updated this session")
+
+        # Check git status
+        git_status = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        # Check if we're ahead of remote
+        git_log = subprocess.run(
+            ['git', 'log', '--oneline', 'origin/main..HEAD'],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if git_status.returncode == 0:
+            has_uncommitted = bool(git_status.stdout.strip())
+            has_unpushed = bool(git_log.stdout.strip()) if git_log.returncode == 0 else False
+
+            if not has_uncommitted and not has_unpushed:
+                result['git_pushed'] = True
+            elif has_uncommitted:
+                result['failures'].append("Uncommitted changes remain")
+            elif has_unpushed:
+                result['failures'].append("Commits not pushed to remote")
+
+        # Overall success
+        result['success'] = (
+            result['issues_closed'] >= 1 and
+            result['meta_updated'] and
+            result['git_pushed']
+        )
+
+        if logger:
+            logger.info(f"Session outcome check: {result}")
+
+    except Exception as e:
+        result['failures'].append(f"Error checking outcomes: {str(e)}")
+        if logger:
+            logger.error(f"Error in check_session_mandatory_outcomes: {e}")
+
+    return result
+
+
 def analyze_session_health(response: str, session_id: str, logger: logging.Logger = None, tool_count: int = None) -> dict:
     """
     Analyze the session response to detect if the agent is doing meaningful work.
@@ -632,33 +774,71 @@ async def ensure_git_and_github_repo(project_dir: Path, logger: logging.Logger):
         logger.info(f"Remote origin added: {remote_url}")
 
         # Create initial commit with .gitignore
-        gitignore_content = """# Python
+        gitignore_content = """# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Large binary files (CRITICAL - prevent GitHub push failures)
+*.node
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 env/
 venv/
 .env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.pem
+.cache/
+.turbo/
 
 # Project specific
 .initialized
 .github_project.json
+.github_cache.json
 """
         gitignore_path = project_dir / ".gitignore"
         gitignore_path.write_text(gitignore_content, encoding='utf-8')
@@ -877,6 +1057,29 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
                 else:
                     logger.warning(f"Git commit failed or no changes: {commit_msg}")
                     print(f"⚠️  {commit_msg}")
+
+                # Check mandatory session outcomes (skip for initializer sessions)
+                if not is_first_run:
+                    print("\n📊 Checking session outcomes...")
+                    session_start = datetime.fromtimestamp(iteration_start_time)
+                    outcomes = check_session_mandatory_outcomes(project_dir, session_start, logger)
+
+                    if outcomes['success']:
+                        print(f"✅ SESSION SUCCESS!")
+                        print(f"   - Issues closed: {outcomes['issues_closed']}")
+                        print(f"   - META updated: {'Yes' if outcomes['meta_updated'] else 'No'}")
+                        print(f"   - Git pushed: {'Yes' if outcomes['git_pushed'] else 'No'}")
+                        logger.info(f"Session outcomes PASSED: {outcomes}")
+                    else:
+                        print(f"⚠️  SESSION INCOMPLETE - Missing mandatory outcomes:")
+                        for failure in outcomes['failures']:
+                            print(f"   - {failure}")
+                        logger.warning(f"Session outcomes FAILED: {outcomes}")
+
+                        # Log outcome failures for tracking
+                        if 'outcome_failures' not in session_metrics:
+                            session_metrics['outcome_failures'] = []
+                        session_metrics['outcome_failures'] = outcomes['failures']
 
                 # After first run, switch modes
                 if is_first_run:

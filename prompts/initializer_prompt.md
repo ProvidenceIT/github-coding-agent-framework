@@ -20,7 +20,60 @@ cat app_spec.txt
 
 Understand the project before proceeding.
 
-### 2️⃣ SECOND: Create Labels (batch all at once)
+### 2️⃣ SECOND: Ensure Proper .gitignore (CRITICAL!)
+
+**Before ANY npm install or file creation:**
+
+```bash
+# Create/update .gitignore to prevent large files in git
+cat > .gitignore << 'EOF'
+# Dependencies - CRITICAL: Must be ignored!
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build outputs
+.next/
+out/
+build/
+dist/
+
+# Large binary files
+*.node
+*.exe
+*.dll
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/
+
+# Project markers
+.initialized
+.github_project.json
+.github_cache.json
+EOF
+
+echo "✅ .gitignore created - node_modules will NOT be committed"
+```
+
+### 3️⃣ THIRD: Create Labels (batch all at once)
 
 ```bash
 # Create all labels in one batch
@@ -35,7 +88,7 @@ gh label create "meta" --color "FFFFFF" --description "Project tracking" 2>&1 ||
 echo "✅ Labels created"
 ```
 
-### 3️⃣ THIRD: Create META Issue FIRST (MANDATORY!)
+### 4️⃣ FOURTH: Create META Issue FIRST (MANDATORY!)
 
 **⚠️ CRITICAL:** The META issue MUST be created BEFORE any other issues. This is your project tracker that future agents depend on.
 
@@ -103,7 +156,7 @@ echo "META issue number: $META_ISSUE"
 
 **Save the META issue number** - you'll update it at session end.
 
-### 4️⃣ FOURTH: Create GitHub Issues from app_spec.txt
+### 5️⃣ FIFTH: Create GitHub Issues from app_spec.txt
 
 Now create issues for all features in app_spec.txt.
 
@@ -139,7 +192,7 @@ EOF
 
 **Create issues efficiently** - batch them without excessive verification between each.
 
-### 5️⃣ FIFTH: Create Project Structure
+### 6️⃣ SIXTH: Create Project Structure
 
 Set up initial files based on app_spec.txt technology stack:
 
@@ -150,7 +203,7 @@ mkdir -p app src/config src/components src/lib logs
 # Create basic config files as needed
 ```
 
-### 6️⃣ SIXTH: Create init.sh
+### 7️⃣ SEVENTH: Create init.sh
 
 ```bash
 cat > init.sh << 'INITEOF'
@@ -177,7 +230,7 @@ chmod +x init.sh
 echo "✅ init.sh created"
 ```
 
-### 7️⃣ SEVENTH: Update META Issue with Final Count
+### 8️⃣ EIGHTH: Update META Issue with Final Count
 
 **Before ending, update the META issue with actual counts:**
 
