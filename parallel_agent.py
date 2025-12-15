@@ -610,7 +610,8 @@ class ParallelAgentManager:
             try:
                 rotator = get_rotator()
                 rotator.sync_env()
-                self._log(session_id, f"Using token: {rotator.current_name}")
+                token_suffix = rotator.current.value[-5:] if len(rotator.current.value) >= 5 else rotator.current.value
+                self._log(session_id, f"Using token: {rotator.current_name} [...{token_suffix}]")
             except Exception as e:
                 self._log(session_id, f"Token sync warning: {e}", "warning")
 

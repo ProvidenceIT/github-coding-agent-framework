@@ -1080,7 +1080,8 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
                 try:
                     rotator = get_rotator()
                     rotator.sync_env()
-                    logger.info(f"Using token: {rotator.current_name} ({rotator.current.auth_type.value})")
+                    token_suffix = rotator.current.value[-5:] if len(rotator.current.value) >= 5 else rotator.current.value
+                    logger.info(f"Using token: {rotator.current_name} ({rotator.current.auth_type.value}) [...{token_suffix}]")
                 except Exception as e:
                     logger.warning(f"Token sync failed: {e}")
 
