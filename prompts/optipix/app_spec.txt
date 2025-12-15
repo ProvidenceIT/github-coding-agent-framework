@@ -1,0 +1,748 @@
+# OptiPix - WordPress Image Optimizer Plugin
+# Application Specification
+
+## Project Overview
+
+**Name:** OptiPix
+**Domain:** optipix.io | api.optipix.io
+**Type:** WordPress Plugin + Self-hosted API Backend
+**Primary Language:** English (with Dutch translation support)
+
+### Description
+OptiPix is an affordable, self-hosted WordPress image optimization plugin as an alternative to Imagify. The plugin offers local processing via a Docker-based microservice, making costs drastically lower than cloud-based competitors.
+
+### Value Proposition
+- 90% cheaper than Imagify at scale (self-hosted vs. SaaS)
+- No API limits - pay once for hosting, compress unlimited
+- Privacy-first - images never leave your server
+- Open source WordPress plugin with premium features
+
+### Target Audiences
+- Web agencies (~500,000 globally)
+- WordPress developers (~2,000,000)
+- Hosting providers (~10,000)
+- WooCommerce shops (~5,000,000)
+- Bloggers, photographers, enterprise users
+
+---
+
+## Technology Stack
+
+### WordPress Plugin
+- PHP 8.0+
+- WordPress 5.8+ compatibility
+- GPLv2 license for WordPress.org compliance
+
+### API Backend
+- Node.js + Fastify (TypeScript)
+- Sharp / libvips for image processing
+- Redis + BullMQ for job queue
+- PostgreSQL for license keys and stats
+- MinIO for S3-compatible local storage
+
+### Infrastructure
+- Docker Compose orchestration
+- Hetzner Dedicated Server with Plesk
+- Let's Encrypt SSL
+- Nginx reverse proxy
+
+### Payments
+- Stripe (international)
+- Mollie (EU)
+
+---
+
+## Features
+
+### PHASE 1 - MVP Core Features
+
+#### F001: WordPress Plugin Foundation
+Create the main WordPress plugin structure with proper WordPress.org compliance.
+- Main plugin file with proper headers
+- Activation/deactivation hooks
+- Uninstall cleanup
+- Constants definition (version, paths, URLs)
+- Autoloader for classes
+- GPLv2 license compliance
+
+#### F002: Plugin Settings Page
+Admin settings page for configuring plugin options.
+- Settings menu under WordPress admin
+- Tabbed interface for different setting categories
+- Form validation and sanitization
+- Nonce verification for security
+- Capability checks for admin access
+- Save settings with WordPress Options API
+
+#### F003: Auto-Compress on Upload
+Automatically optimize images when uploaded to WordPress media library.
+- Hook into wp_handle_upload filter
+- Process JPG, PNG, GIF formats
+- Apply compression based on settings
+- Update attachment metadata
+- Show optimization results in media library
+- Handle upload errors gracefully
+
+#### F004: Smart Compression Algorithm
+Intelligent quality/size balance for optimal compression.
+- Analyze image content type (photo, graphic, text)
+- Dynamic quality adjustment based on content
+- Target file size reduction of 40-80%
+- Preserve visual quality above threshold
+- Different algorithms for different formats
+
+#### F005: Lossless Compression Mode
+Option for zero quality loss compression.
+- Strip metadata (EXIF, ICC profiles optional)
+- Optimize encoding without recompression
+- PNG optimization with pngquant/optipng approach
+- JPEG optimization with jpegtran approach
+- User-selectable lossless option
+
+#### F006: WebP Conversion
+Automatic WebP format conversion for modern browsers.
+- Convert JPG/PNG to WebP
+- Generate WebP alongside original format
+- Serve WebP via HTML picture element
+- Fallback for unsupported browsers
+- Quality settings for WebP output
+- File naming convention (_original.webp suffix)
+
+#### F007: AVIF Conversion
+Next-generation AVIF format support.
+- Convert images to AVIF format
+- Premium feature (license required)
+- Quality settings for AVIF
+- Browser compatibility detection
+- Fallback chain: AVIF > WebP > Original
+
+#### F008: Original File Backup
+Keep original files in separate backup folder.
+- Create backup directory on activation
+- Copy original before optimization
+- Backup directory structure mirrors uploads
+- Option to restore from backup
+- Bulk restore functionality
+- Cleanup old backups option
+
+#### F009: Bulk Optimization Tool
+Process entire existing media library.
+- Admin page for bulk operations
+- Select optimization options
+- Queue-based processing
+- Progress indicator with percentage
+- Pause/resume functionality
+- Skip already optimized images
+- Estimated time remaining
+
+#### F010: Progress Dashboard
+Live progress display for bulk optimization.
+- Real-time progress bar
+- Images processed counter
+- Total savings display
+- Current image preview
+- Error log display
+- Cancel operation button
+- Summary report on completion
+
+#### F011: API Client Class
+PHP class for communicating with OptiPix API server.
+- RESTful API communication
+- License key authentication
+- Image upload/download
+- Error handling and retries
+- Timeout configuration
+- Response parsing
+- Rate limit handling
+
+#### F012: License Key System
+Validate and manage license keys.
+- License key input field in settings
+- Server-side validation via API
+- Store license status in options
+- License tier detection (free/starter/pro/agency)
+- Expiration checking
+- Grace period handling
+- Renewal notifications
+
+#### F013: Queue System for Background Processing
+Background job queue for non-blocking optimization.
+- WordPress cron-based queue
+- Action scheduler integration option
+- Job status tracking
+- Failed job retry mechanism
+- Concurrent job limit
+- Queue priority levels
+- Queue health monitoring
+
+#### F014: Image Format Support
+Support all common image formats.
+- JPEG (.jpg, .jpeg)
+- PNG (.png)
+- GIF (.gif) - static and animated
+- WebP input support
+- BMP to JPG conversion
+- TIFF handling
+
+#### F015: Compression Level Settings
+User-configurable compression levels.
+- Preset levels: Lossless, Smart, Aggressive
+- Custom quality slider (0-100)
+- Per-format quality settings
+- Preview compression result
+- Recommended settings guide
+
+---
+
+### PHASE 2 - Extended Features
+
+#### F016: Lazy Loading Integration
+Native lazy load for optimized images.
+- Add loading="lazy" attribute
+- JavaScript fallback for older browsers
+- Placeholder generation (blur-up, LQIP)
+- Intersection Observer implementation
+- Exclude above-fold images
+- WordPress native lazy loading integration
+
+#### F017: Maximum Image Dimensions
+Automatic resize on upload.
+- Max width/height settings
+- Maintain aspect ratio
+- Apply before compression
+- Option per image type
+- Bypass for specific users/roles
+- WooCommerce product image sizes
+
+#### F018: CDN Integration
+Optional Cloudflare/Bunny CDN integration.
+- CDN URL rewriting
+- Cache purge on optimization
+- Cloudflare API integration
+- Bunny CDN API integration
+- Custom CDN endpoint support
+- CDN status in dashboard
+
+#### F019: Exclude Patterns
+Skip certain images from optimization.
+- Filename patterns (regex support)
+- Directory exclusions
+- File size thresholds
+- Custom meta flag for exclusion
+- Plugin/theme image exclusion
+- WooCommerce specific exclusions
+
+#### F020: WP-CLI Commands
+Command line interface for OptiPix.
+- wp optipix optimize [attachment_id]
+- wp optipix bulk --limit=100
+- wp optipix status
+- wp optipix restore [attachment_id]
+- wp optipix stats
+- wp optipix config get/set
+
+#### F021: REST API Endpoints
+API for headless WordPress and external access.
+- /wp-json/optipix/v1/optimize
+- /wp-json/optipix/v1/status/{id}
+- /wp-json/optipix/v1/stats
+- Authentication via application passwords
+- Rate limiting
+- OpenAPI documentation
+
+#### F022: WordPress Multisite Support
+Full multisite network compatibility.
+- Network-wide settings
+- Per-site overrides
+- Shared license across network
+- Network admin dashboard
+- Usage quotas per site
+- Centralized statistics
+
+#### F023: Statistics Dashboard
+Detailed savings and usage insights.
+- Total images optimized
+- Total bytes saved
+- Average compression ratio
+- Format distribution chart
+- Monthly usage graph
+- Top 10 largest savings
+- Export statistics to CSV
+
+#### F024: Media Library Column
+Show optimization status in media library.
+- Custom column in list view
+- Status icons (optimized/pending/error)
+- File size before/after
+- Quick optimize button
+- Bulk action integration
+- Filter by optimization status
+
+#### F025: Image Comparison View
+Before/after comparison in media modal.
+- Side-by-side view
+- Slider comparison
+- Zoom functionality
+- File size comparison
+- Quality metrics display
+- Download original option
+
+---
+
+### PHASE 3 - Advanced Features
+
+#### F026: Adaptive Images
+Different sizes per device/viewport.
+- srcset generation
+- sizes attribute optimization
+- Art direction support
+- Retina display handling
+- Mobile-first optimization
+- WordPress responsive images enhancement
+
+#### F027: Theme/Plugin Image Scanning
+Optimize images in themes and plugins.
+- Scan theme directories
+- Scan plugin assets
+- One-click optimization
+- Exclude system images
+- Track theme/plugin updates
+- Restore on theme change
+
+#### F028: Database Cleanup
+Remove unused image sizes.
+- Detect unused thumbnail sizes
+- Remove orphaned attachments
+- Clean failed optimizations
+- Database optimization
+- Size recovery report
+- Dry-run mode
+
+#### F029: PDF Optimization
+PDF compression support.
+- Reduce PDF file size
+- Preserve text quality
+- Image compression in PDFs
+- Metadata stripping option
+- PDF/A compliance option
+- Batch PDF processing
+
+#### F030: White-Label Mode
+Branding customization for agencies/hosters.
+- Custom plugin name
+- Custom logo/icon
+- Custom color scheme
+- Remove OptiPix branding
+- Custom support links
+- Agency license required
+
+#### F031: Priority Queue
+Important images first processing.
+- Featured images priority
+- WooCommerce product images priority
+- Recent uploads priority
+- Manual priority setting
+- Custom priority rules
+- VIP image list
+
+#### F032: Scheduled Optimization
+Time-based optimization scheduling.
+- Off-peak hours processing
+- Daily/weekly schedules
+- Server load awareness
+- Pause during high traffic
+- Calendar integration
+- Timezone support
+
+---
+
+### API BACKEND FEATURES
+
+#### F033: API Server Setup
+Node.js Fastify server for image processing.
+- TypeScript implementation
+- Fastify framework
+- Health check endpoint
+- Request logging
+- Error handling middleware
+- Graceful shutdown
+
+#### F034: Sharp Image Processing
+Image optimization using Sharp library.
+- JPEG optimization
+- PNG optimization
+- WebP generation
+- AVIF generation
+- Resize operations
+- Metadata handling
+
+#### F035: Redis Job Queue
+BullMQ queue for async processing.
+- Job creation and tracking
+- Concurrent worker processing
+- Job retry on failure
+- Job progress updates
+- Queue metrics
+- Dead letter queue
+
+#### F036: License Validation API
+Server-side license key management.
+- License key generation
+- Activation/deactivation
+- Domain binding
+- Usage tracking
+- Expiration enforcement
+- License tier verification
+
+#### F037: PostgreSQL Database
+Database for license and usage data.
+- License keys table
+- Usage statistics table
+- Customer information
+- Prisma ORM integration
+- Migration management
+- Backup procedures
+
+#### F038: MinIO Object Storage
+Temporary file storage during processing.
+- S3-compatible API
+- Bucket management
+- Auto-cleanup of processed files
+- Retention policies
+- Access logging
+- Storage metrics
+
+#### F039: Rate Limiting
+API rate limiting per license tier.
+- Requests per minute limits
+- Concurrent request limits
+- Tier-based limits
+- Rate limit headers
+- Backoff recommendations
+- Abuse prevention
+
+#### F040: API Authentication
+Secure API access.
+- License key authentication
+- Request signing (HMAC)
+- TLS enforcement
+- IP allowlisting option
+- API key rotation
+- Audit logging
+
+---
+
+### INFRASTRUCTURE FEATURES
+
+#### F041: Docker Compose Stack
+Complete Docker deployment setup.
+- API service container
+- Worker service container
+- PostgreSQL container
+- Redis container
+- MinIO container
+- Dashboard container (optional)
+- Network configuration
+
+#### F042: Plesk Configuration
+Nginx proxy rules for Plesk hosting.
+- Domain configuration
+- SSL certificate setup
+- Reverse proxy to Docker
+- Upload size limits
+- Timeout configuration
+- Health check endpoint
+
+#### F043: CI/CD Pipeline
+GitHub Actions deployment automation.
+- Automated testing
+- Docker image building
+- SSH deployment to server
+- Database migrations
+- Health check verification
+- Rollback capability
+
+#### F044: Monitoring and Logging
+Application monitoring setup.
+- Structured logging (JSON)
+- Log aggregation
+- Error tracking (Sentry option)
+- Performance metrics
+- Uptime monitoring
+- Alert notifications
+
+---
+
+### WEBSITE FEATURES
+
+#### F045: Landing Page
+Marketing website at optipix.io.
+- Hero section with value proposition
+- Feature highlights
+- Pricing table
+- Comparison with competitors
+- Testimonials section
+- FAQ section
+- Call-to-action buttons
+
+#### F046: Documentation Site
+User and developer documentation.
+- Installation guide
+- Configuration guide
+- Troubleshooting guide
+- API reference
+- Developer hooks documentation
+- Video tutorials
+
+#### F047: Customer Dashboard
+Account management portal.
+- License key management
+- Usage statistics
+- Billing history
+- Support ticket system
+- Download links
+- Account settings
+
+#### F048: Stripe Integration
+Payment processing with Stripe.
+- Subscription management
+- One-time payments
+- Invoice generation
+- Tax handling (Stripe Tax)
+- Webhook handling
+- Customer portal
+
+#### F049: Mollie Integration
+EU payment processing with Mollie.
+- iDEAL support
+- SEPA Direct Debit
+- Credit card processing
+- Subscription management
+- Invoice generation
+- Webhook handling
+
+#### F050: Email System
+Transactional email delivery.
+- Welcome emails
+- License delivery
+- Usage warnings
+- Renewal reminders
+- Support notifications
+- Newsletter (opt-in)
+
+---
+
+### TESTING AND QUALITY
+
+#### F051: PHP Unit Tests
+WordPress plugin testing.
+- PHPUnit test suite
+- WordPress test framework
+- Mock API responses
+- Settings validation tests
+- Hook integration tests
+- 80% code coverage target
+
+#### F052: JavaScript Tests
+Frontend JavaScript testing.
+- Jest test framework
+- Component testing
+- Integration tests
+- E2E with Cypress option
+- Coverage reporting
+
+#### F053: API Tests
+Backend API testing.
+- Supertest for HTTP tests
+- Unit tests for services
+- Integration tests
+- Load testing
+- Security testing
+
+#### F054: WordPress.org Plugin Check
+Compliance validation.
+- Plugin Check tool passing
+- Security review preparation
+- Coding standards (PHPCS)
+- Internationalization ready
+- Accessibility compliance
+- No obfuscated code
+
+---
+
+### LOCALIZATION
+
+#### F055: Translation Ready
+Full internationalization support.
+- Text domain: optipix
+- POT file generation
+- English (default)
+- Dutch translation
+- Translation-ready strings
+- Date/number formatting
+
+---
+
+## UI/UX Requirements
+
+### WordPress Admin
+- Follow WordPress admin UI conventions
+- Use WordPress color palette
+- Responsive admin pages
+- Accessible (WCAG 2.1 AA)
+- Clear success/error messages
+- Contextual help tabs
+
+### Progress Indicators
+- Percentage progress bars
+- Animated spinners for waiting
+- Time remaining estimates
+- Clear completion states
+- Error state handling
+
+### Settings Interface
+- Logical grouping of options
+- Clear labels and descriptions
+- Input validation feedback
+- Default value indicators
+- Reset to defaults option
+
+---
+
+## Security Requirements
+
+- Nonce verification on all forms
+- Capability checks on admin pages
+- Input sanitization
+- Output escaping
+- Prepared SQL statements
+- No direct file access (ABSPATH check)
+- Secure API communication (HTTPS)
+- License key encryption at rest
+- Rate limiting on API
+- CSRF protection
+
+---
+
+## Performance Requirements
+
+- No blocking operations on frontend
+- Async/background processing
+- Efficient database queries
+- Minimal admin page load impact
+- Lazy loading of admin assets
+- Caching of API responses
+- Optimized bulk operations
+
+---
+
+## Compliance Requirements
+
+### WordPress.org
+- GPLv2 or later license
+- No obfuscated code
+- Human-readable source
+- No tracking without consent
+- No affiliate links in frontend
+- All dependencies GPL-compatible
+- Plugin Check tool passed
+- Proper escaping and sanitization
+
+### GDPR
+- No personal data sent without consent
+- Data export capability
+- Data deletion capability
+- Privacy policy documentation
+- Cookie consent if applicable
+
+---
+
+## Deployment Plan
+
+### Phase 1 (Weeks 1-6)
+1. Domain registration (optipix.io)
+2. Docker Compose setup on Hetzner
+3. API server with Sharp integration
+4. WordPress plugin foundation
+5. Core optimization features
+6. License system basics
+
+### Phase 2 (Weeks 7-12)
+1. Bulk optimization
+2. WebP/AVIF conversion
+3. Statistics dashboard
+4. WordPress.org submission
+5. Landing page launch
+6. Payment integration
+
+### Phase 3 (Months 3-6)
+1. Advanced features
+2. CDN integrations
+3. CLI tools
+4. Multisite support
+5. White-label options
+6. Scale infrastructure
+
+---
+
+## Success Metrics
+
+- WordPress.org approval within 2 weeks of submission
+- 500 free users in first 3 months
+- 25 paid users in first 3 months
+- 4.5+ star rating on WordPress.org
+- <1% support ticket rate
+- 99.9% API uptime
+
+---
+
+## File Structure
+
+### WordPress Plugin
+```
+optipix/
+├── optipix.php
+├── readme.txt
+├── uninstall.php
+├── LICENSE
+├── languages/
+├── includes/
+│   ├── class-optipix.php
+│   ├── class-optipix-api.php
+│   ├── class-optipix-optimizer.php
+│   ├── class-optipix-queue.php
+│   └── class-optipix-settings.php
+├── admin/
+│   ├── class-optipix-admin.php
+│   ├── css/
+│   ├── js/
+│   └── partials/
+├── public/
+│   └── class-optipix-public.php
+└── assets/
+```
+
+### API Backend
+```
+api/
+├── src/
+│   ├── index.ts
+│   ├── routes/
+│   ├── services/
+│   ├── workers/
+│   └── utils/
+├── prisma/
+│   └── schema.prisma
+├── Dockerfile
+└── package.json
+```
+
+### Docker Stack
+```
+docker/
+├── docker-compose.yml
+├── .env.example
+├── api/Dockerfile
+├── worker/Dockerfile
+└── dashboard/Dockerfile
+```

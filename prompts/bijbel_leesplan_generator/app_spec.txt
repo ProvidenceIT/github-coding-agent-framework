@@ -1,0 +1,905 @@
+# LeesWijs - AI-Powered Personalized Bible Reading Plan Generator
+
+## Project Overview
+
+LeesWijs is an AI-powered web application that generates personalized Bible reading plans based on users' life situations, interests, experience level, and available time. The app includes daily readings with reflection questions, progress tracking with streaks, and reminder notifications.
+
+### Core Value Proposition
+- Personalized Bible reading plans (not one-size-fits-all)
+- AI-generated plans that adapt to user's life situation
+- Progress tracking with motivating streak system
+- Daily email reminders at user-preferred times
+- PWA for offline access and mobile-first experience
+
+### Target Users
+- New believers looking for guidance on where to start
+- Returning Christians wanting to re-engage with Bible reading
+- Busy professionals needing short, relevant daily readings
+- Young adults seeking accessible Bible content
+- Bible study groups wanting shared reading plans
+
+---
+
+## Technology Stack (Latest Versions - December 2025)
+
+### Frontend
+- **Next.js 16.0.10** - React framework with App Router, Turbopack, React 19.2 support
+- **React 19.2.1** - Latest with Activity component, Server Actions
+- **TypeScript 5.7.2** - Type safety
+- **Tailwind CSS 4.1** - Utility-first CSS with new text-shadow, mask utilities
+- **shadcn/ui** - Accessible component library (Tailwind v4 compatible)
+- **PWA** - Service worker for offline support, push notifications
+
+### Backend
+- **Node.js 22 LTS** - JavaScript runtime
+- **tRPC 11.7.1** - End-to-end typesafe APIs with SSE subscriptions
+- **Prisma 7.0** - ORM with mapped enums, new Prisma Studio
+
+### Database & Cache
+- **PostgreSQL 18.1** - Primary database with JSONB support
+- **Redis 7** - Session caching, streak data, rate limiting
+
+### Authentication
+- **Auth.js (NextAuth.js) v5** - Magic link authentication, OAuth providers
+
+### AI
+- **Claude 3.5 Sonnet** - Plan generation with excellent Dutch language support
+
+### External Services
+- **SendGrid** - Transactional emails, daily reminders
+- **Mollie** - Dutch payment provider (iDEAL, credit card)
+
+### Infrastructure
+- **Docker Compose** - Container orchestration
+- **Hetzner Dedicated Server** - Hosting (existing infrastructure)
+- **Plesk Panel** - SSL/TLS, reverse proxy configuration
+- **GitHub Actions** - CI/CD pipeline
+- **Let's Encrypt** - SSL certificates
+
+---
+
+## Database Schema
+
+### Feature 1: User Management Schema
+Create PostgreSQL schema for users table with the following fields:
+- id (UUID, primary key, auto-generated)
+- email (VARCHAR 255, unique, not null)
+- name (VARCHAR 255)
+- password_hash (VARCHAR 255, nullable for magic link users)
+- preferred_translation (VARCHAR 10, default 'HSV')
+- reminder_time (TIME, default '08:00')
+- reminder_enabled (BOOLEAN, default true)
+- timezone (VARCHAR 50, default 'Europe/Amsterdam')
+- subscription_tier (VARCHAR 20, default 'free')
+- subscription_expires_at (TIMESTAMP, nullable)
+- created_at (TIMESTAMP, default NOW())
+- updated_at (TIMESTAMP, default NOW())
+
+### Feature 2: Intake Responses Schema
+Create intake_responses table to store user questionnaire answers:
+- id (UUID, primary key)
+- user_id (UUID, foreign key to users, cascade delete)
+- bible_experience (VARCHAR 50: 'beginner', 'some', 'regular', 'advanced')
+- life_situation (JSONB array of selected situations)
+- interests (JSONB array of selected topics)
+- daily_minutes (INTEGER: 5, 10, 15, 20, 30)
+- duration (VARCHAR 20: '1week', '2weeks', '1month', '3months', '6months', '1year')
+- include_ot (BOOLEAN, default true)
+- include_nt (BOOLEAN, default true)
+- created_at (TIMESTAMP)
+
+### Feature 3: Reading Plans Schema
+Create reading_plans table:
+- id (UUID, primary key)
+- user_id (UUID, foreign key to users)
+- title (VARCHAR 255, not null)
+- description (TEXT)
+- total_days (INTEGER, not null)
+- start_date (DATE)
+- status (VARCHAR 20: 'active', 'paused', 'completed', 'abandoned')
+- current_day (INTEGER, default 1)
+- ai_generated (BOOLEAN, default true)
+- created_at (TIMESTAMP)
+- completed_at (TIMESTAMP, nullable)
+
+### Feature 4: Plan Days Schema
+Create plan_days table for individual reading assignments:
+- id (UUID, primary key)
+- plan_id (UUID, foreign key to reading_plans, cascade delete)
+- day_number (INTEGER, not null)
+- title (VARCHAR 255)
+- passage (VARCHAR 100, not null) - e.g., "Johannes 1:1-18"
+- estimated_minutes (INTEGER)
+- theme (VARCHAR 255)
+- reflection_question (TEXT)
+- connection_to_situation (TEXT, nullable)
+- UNIQUE constraint on (plan_id, day_number)
+
+### Feature 5: Reading Progress Schema
+Create reading_progress table:
+- id (UUID, primary key)
+- user_id (UUID, foreign key to users)
+- plan_day_id (UUID, foreign key to plan_days)
+- completed (BOOLEAN, default false)
+- completed_at (TIMESTAMP, nullable)
+- journal_entry (TEXT, nullable)
+- rating (INTEGER, CHECK 1-5, nullable)
+- UNIQUE constraint on (user_id, plan_day_id)
+
+### Feature 6: Streaks Schema
+Create streaks table for gamification:
+- id (UUID, primary key)
+- user_id (UUID, foreign key to users, unique)
+- current_streak (INTEGER, default 0)
+- longest_streak (INTEGER, default 0)
+- last_read_date (DATE)
+- updated_at (TIMESTAMP)
+
+### Feature 7: Reminder Log Schema
+Create reminder_log table for email tracking:
+- id (UUID, primary key)
+- user_id (UUID, foreign key to users)
+- sent_at (TIMESTAMP, default NOW())
+- status (VARCHAR 20: 'sent', 'failed', 'opened')
+- plan_id (UUID, foreign key to reading_plans)
+
+### Feature 8: Database Indexes
+Create performance indexes:
+- idx_reading_plans_user ON reading_plans(user_id)
+- idx_reading_plans_status ON reading_plans(status)
+- idx_reading_progress_user ON reading_progress(user_id)
+- idx_streaks_user ON streaks(user_id)
+- idx_plan_days_plan ON plan_days(plan_id)
+- idx_reminder_log_user ON reminder_log(user_id)
+
+---
+
+## Backend API (tRPC Routers)
+
+### Feature 9: Auth Router
+Create tRPC auth router with procedures:
+- sendMagicLink: Send magic link email for passwordless login
+- verifyMagicLink: Verify token and create session
+- getSession: Get current user session
+- logout: Invalidate session
+- updateProfile: Update user profile settings
+
+### Feature 10: Intake Router
+Create tRPC intake router:
+- submitIntake: Save intake questionnaire responses
+- getLatestIntake: Retrieve user's most recent intake
+- updateIntake: Modify existing intake responses
+
+### Feature 11: Plan Router
+Create tRPC plan router:
+- generatePlan: Call Claude AI to generate personalized reading plan
+- getActivePlan: Get user's current active plan
+- getAllPlans: List all user's plans with pagination
+- getPlanById: Get specific plan with all days
+- updatePlanStatus: Pause, resume, or abandon plan
+- deletePlan: Soft delete a plan
+
+### Feature 12: Progress Router
+Create tRPC progress router:
+- markDayComplete: Mark a reading day as completed
+- markDayIncomplete: Unmark a completed day
+- addJournalEntry: Add/update journal entry for a day
+- addRating: Rate a reading (1-5 stars)
+- getTodayReading: Get today's assigned reading
+- getWeekProgress: Get progress for current week
+
+### Feature 13: Streak Router
+Create tRPC streak router:
+- getStreak: Get user's current and longest streak
+- updateStreak: Internal procedure to update streak on completion
+- getLeaderboard: Optional - get top streaks (anonymized)
+
+### Feature 14: Reminder Router
+Create tRPC reminder router:
+- updateReminderSettings: Set reminder time and enable/disable
+- getReminderSettings: Get current reminder configuration
+- testReminder: Send test reminder email
+
+### Feature 15: Subscription Router
+Create tRPC subscription router:
+- createPayment: Initialize Mollie payment for subscription
+- handleWebhook: Process Mollie payment webhooks
+- getSubscriptionStatus: Check current subscription tier
+- cancelSubscription: Cancel active subscription
+
+---
+
+## AI Plan Generation
+
+### Feature 16: Claude AI Service
+Create AI service for plan generation using Claude 3.5 Sonnet:
+- Accept intake data (experience, situation, interests, time, duration)
+- Generate structured JSON plan with all days
+- Include theme, passage, estimated reading time, reflection question
+- Connect passages to user's life situation where relevant
+- Handle Dutch language for all generated content
+
+### Feature 17: AI Prompt Template
+Create optimized prompt template for plan generation:
+- Include user profile context
+- Apply guidelines for beginner-friendly progression
+- Avoid difficult passages (genealogies, laws) for beginners
+- Balance OT/NT based on preferences
+- Calculate appropriate passage lengths based on daily minutes
+- Output structured JSON format
+
+### Feature 18: Plan Validation
+Validate AI-generated plans:
+- Verify all Bible references are valid
+- Check estimated reading times are reasonable
+- Ensure day count matches requested duration
+- Validate JSON structure before database insertion
+
+### Feature 19: Plan Regeneration
+Allow users to regenerate plans:
+- Keep original intake data
+- Generate new plan with different passages
+- Option to specify what didn't work about previous plan
+
+---
+
+## Frontend Pages & Components
+
+### Feature 20: Landing Page
+Create responsive landing page:
+- Hero section explaining the service
+- Features overview (personalized plans, AI-powered, tracking)
+- Testimonials section
+- CTA button to start intake wizard
+- Dutch language content
+
+### Feature 21: Intake Wizard - Welcome Screen
+Create welcome screen (step 0):
+- Friendly introduction to the service
+- Explanation of the process (2 minutes)
+- Start button to begin questionnaire
+
+### Feature 22: Intake Wizard - Experience Screen
+Create experience selection (step 1):
+- Radio buttons for Bible familiarity level
+- Options: Beginner, Some experience, Regular reader, Advanced
+- Optional: Favorite Bible books multi-select
+
+### Feature 23: Intake Wizard - Life Situation Screen
+Create life situation selection (step 2):
+- Multi-select checkboxes
+- Options: New faith, Growth, Crisis, Grief, Stress, Relationships, Parenting, Work, Illness, Other
+- Optional text field for additional context
+
+### Feature 24: Intake Wizard - Interests Screen
+Create interests selection (step 3):
+- Multi-select checkboxes for Bible topics
+- Options: Life of Jesus, Psalms, Wisdom literature, OT stories, Paul's letters, Prophets, Creation, End times
+
+### Feature 25: Intake Wizard - Time & Duration Screen
+Create time preferences (step 4):
+- Radio buttons for daily reading time (5, 10, 15, 20, 30 minutes)
+- Radio buttons for plan duration (1 week, 2 weeks, 1 month, 3 months, 6 months, 1 year)
+- Preferred reading time (morning, evening, flexible)
+
+### Feature 26: Intake Wizard - Translation Screen
+Create translation preference (step 5):
+- Radio buttons for Bible translation
+- Options: HSV, NBV21, BGT, SV
+- Brief description of each translation style
+
+### Feature 27: Plan Generation Loading Screen
+Create loading screen while AI generates plan:
+- Animated progress indicator
+- Encouraging messages during generation
+- Estimated wait time (10-30 seconds)
+
+### Feature 28: Plan Overview Screen
+Create plan overview after generation:
+- Plan title and description
+- Total days and estimated completion date
+- Preview of first few readings
+- Start plan button
+- Option to regenerate if not satisfied
+
+### Feature 29: Daily Reading View
+Create main reading view:
+- Current day number and total progress
+- Streak counter with fire icon
+- Today's passage title and reference
+- Bible text display (scrollable)
+- Reflection question card
+- Journal entry text area
+- Mark as complete button
+
+### Feature 30: Progress Dashboard
+Create progress dashboard:
+- Visual progress bar for current plan
+- Calendar view with completed days highlighted
+- Current and longest streak display
+- Weekly reading summary
+- Plan statistics (days completed, average time)
+
+### Feature 31: Plan Calendar View
+Create calendar component:
+- Month view showing all plan days
+- Color coding: completed, today, upcoming, missed
+- Click to navigate to specific day's reading
+
+### Feature 32: Journal View
+Create journal/notes view:
+- List of all journal entries
+- Filter by date range
+- Search functionality
+- Export journal entries option
+
+### Feature 33: Settings Page
+Create user settings page:
+- Profile information (name, email)
+- Reminder settings (time, enable/disable)
+- Translation preference
+- Timezone selection
+- Account management (password, delete account)
+
+### Feature 34: Subscription Page
+Create subscription management:
+- Current plan display
+- Upgrade options (Free, Plus, Familie)
+- Payment via Mollie (iDEAL)
+- Billing history
+- Cancel subscription option
+
+### Feature 35: Navigation Component
+Create responsive navigation:
+- Mobile: Bottom navigation bar
+- Desktop: Side navigation
+- Items: Home, Read, Progress, Settings
+- Active state indicators
+
+### Feature 36: Streak Badge Component
+Create streak display component:
+- Fire icon with current streak number
+- Animation on milestone achievements
+- Tooltip with longest streak info
+
+### Feature 37: Reading Progress Component
+Create progress indicator:
+- Circular or linear progress bar
+- Percentage complete
+- Days remaining count
+
+### Feature 38: Bible Text Display Component
+Create Bible text viewer:
+- Clean typography optimized for reading
+- Verse numbers
+- Paragraph formatting
+- Font size adjustment
+- Dark mode support
+
+### Feature 39: Reflection Card Component
+Create reflection question component:
+- Question display with icon
+- Expandable answer area
+- Save answer functionality
+
+### Feature 40: Toast/Notification Component
+Create notification system:
+- Success messages (day completed, streak milestone)
+- Error messages
+- Auto-dismiss with manual close option
+
+---
+
+## PWA Features
+
+### Feature 41: PWA Manifest
+Create web app manifest:
+- App name: LeesWijs
+- Short name: LeesWijs
+- Theme color and background color
+- Icons in multiple sizes
+- Display mode: standalone
+- Start URL: /lezen
+- Orientation: portrait
+
+### Feature 42: Service Worker
+Implement service worker:
+- Cache static assets
+- Cache API responses for offline reading
+- Background sync for marking completions
+- Push notification handling
+
+### Feature 43: Offline Reading
+Enable offline access:
+- Cache current day's reading
+- Cache next 7 days of readings
+- Show offline indicator
+- Queue actions for sync when online
+
+### Feature 44: Push Notifications
+Implement push notifications:
+- Daily reading reminders
+- Streak milestone celebrations
+- Plan completion congratulations
+- Opt-in/opt-out in settings
+
+### Feature 45: Install Prompt
+Create app install prompt:
+- Custom install banner
+- Show after 2nd visit
+- Store dismissal preference
+
+---
+
+## Email System
+
+### Feature 46: SendGrid Integration
+Configure SendGrid:
+- API key setup
+- Sender verification for domain
+- Email templates in Dutch
+
+### Feature 47: Daily Reminder Email
+Create daily reminder email template:
+- Personalized greeting
+- Today's passage reference
+- Current streak motivation
+- Direct link to reading
+- Unsubscribe link
+
+### Feature 48: Streak Milestone Email
+Create milestone celebration emails:
+- Trigger at 7, 14, 30, 50, 100, 365 days
+- Congratulatory message
+- Share achievement option
+- Encouragement to continue
+
+### Feature 49: Welcome Email
+Create welcome email:
+- Send after account creation
+- Introduce the service
+- Tips for getting started
+- Link to first reading
+
+### Feature 50: Plan Completion Email
+Create completion celebration email:
+- Congratulate on finishing plan
+- Summary of accomplishment
+- Prompt to start new plan
+- Share option
+
+### Feature 51: Reminder Scheduler
+Implement reminder cron job:
+- Run every 15 minutes
+- Check users' reminder times across timezones
+- Send personalized reminders
+- Log all sent emails
+
+---
+
+## Payment System
+
+### Feature 52: Mollie Integration
+Configure Mollie payment provider:
+- API key setup
+- Webhook endpoint configuration
+- iDEAL payment method
+- Credit card as backup
+
+### Feature 53: Subscription Tiers
+Implement subscription logic:
+- Free: 1 active plan, basic features
+- Plus (€3.99/mo): Unlimited plans, journal, no ads
+- Familie (€6.99/mo): 4 accounts, shared plans
+
+### Feature 54: Payment Flow
+Create payment flow:
+- Select tier
+- Redirect to Mollie checkout
+- Handle success/failure callbacks
+- Update user subscription status
+
+### Feature 55: Subscription Webhooks
+Handle Mollie webhooks:
+- Payment successful: Activate subscription
+- Payment failed: Send notification, retry
+- Subscription cancelled: Downgrade to free
+
+---
+
+## Docker Configuration
+
+### Feature 56: Frontend Dockerfile
+Create multi-stage Dockerfile for Next.js:
+- Node 22 Alpine base
+- Build stage with dependencies
+- Production stage with minimal image
+- Health check endpoint
+
+### Feature 57: Backend Dockerfile
+Create multi-stage Dockerfile for Node.js/tRPC:
+- Node 22 Alpine base
+- Build TypeScript
+- Production stage
+- Health check endpoint
+- Run migrations on startup
+
+### Feature 58: Docker Compose Configuration
+Create docker-compose.yml:
+- Frontend service (port 8082 internal, 3000 container)
+- Backend service (port 8003 internal, 5000 container)
+- PostgreSQL 18 (port 5434 internal)
+- Redis 7 (port 6381 internal)
+- Backup service for daily database backups
+- Shared network and volumes
+
+### Feature 59: Environment Configuration
+Create .env.example with all required variables:
+- Database credentials
+- JWT secrets
+- API keys (Anthropic, SendGrid, Mollie)
+- Frontend/backend URLs
+- CORS origins
+
+### Feature 60: Database Initialization Script
+Create init.sql script:
+- Create all tables
+- Create indexes
+- Insert default data if needed
+
+### Feature 61: Backup Script
+Create backup.sh for PostgreSQL:
+- Daily automated backups
+- Retention policy (keep 7 daily, 4 weekly)
+- Compression
+- Optional upload to external storage
+
+---
+
+## Deployment & CI/CD
+
+### Feature 62: GitHub Actions Workflow
+Create deploy.yml workflow:
+- Trigger on push to main
+- SSH to Hetzner server
+- Create .env from secrets
+- Rsync files to server
+- Build and restart containers
+- Run database migrations
+- Health check verification
+
+### Feature 63: Plesk Nginx Configuration
+Document Plesk nginx proxy rules:
+- Route / to frontend (8082)
+- Route /api to backend (8003)
+- WebSocket support for PWA
+- Longer timeouts for AI generation
+
+### Feature 64: SSL Configuration
+Configure SSL via Plesk:
+- Let's Encrypt certificate
+- Auto-renewal
+- Force HTTPS redirect
+
+### Feature 65: Health Check Endpoints
+Implement health checks:
+- Frontend: /api/health
+- Backend: /health
+- Check database connectivity
+- Check Redis connectivity
+
+---
+
+## Security
+
+### Feature 66: Input Validation
+Implement input validation:
+- Zod schemas for all tRPC inputs
+- Sanitize user-generated content
+- Validate Bible references
+
+### Feature 67: Rate Limiting
+Implement rate limiting:
+- Redis-based rate limiter
+- AI generation: 10 requests/hour
+- API endpoints: 100 requests/minute
+- Authentication: 5 attempts/15 minutes
+
+### Feature 68: CSRF Protection
+Implement CSRF protection:
+- Token-based CSRF for forms
+- SameSite cookie attributes
+
+### Feature 69: Session Security
+Secure session handling:
+- HTTP-only cookies
+- Secure flag in production
+- Session expiration
+- Refresh token rotation
+
+---
+
+## Testing
+
+### Feature 70: Unit Tests
+Write unit tests for:
+- Streak calculation logic
+- Plan validation
+- Date/timezone utilities
+- API input validation
+
+### Feature 71: Integration Tests
+Write integration tests for:
+- tRPC routers
+- Database operations
+- AI plan generation
+- Email sending
+
+### Feature 72: E2E Tests
+Write Playwright E2E tests for:
+- Intake wizard flow
+- Reading and completing days
+- Streak updates
+- Settings changes
+
+---
+
+## Monitoring & Logging
+
+### Feature 73: Application Logging
+Implement structured logging:
+- Request/response logging
+- Error logging with stack traces
+- AI generation timing
+- Email delivery status
+
+### Feature 74: Error Tracking
+Set up error monitoring:
+- Capture unhandled exceptions
+- Alert on critical errors
+- Error grouping and trends
+
+### Feature 75: Performance Monitoring
+Track performance metrics:
+- API response times
+- AI generation duration
+- Database query performance
+- Page load times
+
+---
+
+## Accessibility
+
+### Feature 76: WCAG Compliance
+Ensure accessibility:
+- Semantic HTML
+- ARIA labels
+- Keyboard navigation
+- Screen reader support
+- Color contrast compliance
+
+### Feature 77: Responsive Design
+Implement responsive layouts:
+- Mobile-first approach
+- Tablet optimization
+- Desktop layouts
+- Touch-friendly controls
+
+### Feature 78: Dark Mode
+Implement dark mode:
+- System preference detection
+- Manual toggle
+- Persistent preference
+- Optimized reading colors
+
+---
+
+## Internationalization
+
+### Feature 79: Dutch Language
+All UI in Dutch:
+- Interface text
+- Error messages
+- Email content
+- AI-generated content
+
+### Feature 80: Date/Time Localization
+Dutch date formatting:
+- Day names in Dutch
+- Date format: dd-mm-yyyy
+- Time format: 24-hour
+
+---
+
+## Additional Features
+
+### Feature 81: Bible API Integration
+Integrate Bible text source:
+- Fetch passages by reference
+- Support multiple translations (HSV, NBV21, BGT, SV)
+- Cache frequently accessed passages
+
+### Feature 82: Reading Statistics
+Track and display statistics:
+- Total chapters read
+- Total reading time
+- Average daily reading time
+- Most read Bible books
+
+### Feature 83: Share Functionality
+Enable sharing:
+- Share streak achievements
+- Share completed plans
+- Social media integration
+- Shareable reading links
+
+### Feature 84: Export Data
+Allow data export:
+- Export journal entries as PDF
+- Export reading history
+- Export plan as printable PDF
+
+### Feature 85: Feedback System
+Collect user feedback:
+- Rating after plan completion
+- Feedback form
+- Feature request submission
+
+---
+
+## Project Structure
+
+```
+leeswijs/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── backend/
+│   ├── src/
+│   │   ├── routers/
+│   │   │   ├── auth.router.ts
+│   │   │   ├── intake.router.ts
+│   │   │   ├── plan.router.ts
+│   │   │   ├── progress.router.ts
+│   │   │   ├── streak.router.ts
+│   │   │   ├── reminder.router.ts
+│   │   │   └── subscription.router.ts
+│   │   ├── services/
+│   │   │   ├── ai.service.ts
+│   │   │   ├── email.service.ts
+│   │   │   ├── reminder.service.ts
+│   │   │   ├── payment.service.ts
+│   │   │   └── bible.service.ts
+│   │   ├── db/
+│   │   │   ├── schema.prisma
+│   │   │   └── migrations/
+│   │   ├── utils/
+│   │   │   ├── validation.ts
+│   │   │   └── streak.ts
+│   │   ├── trpc.ts
+│   │   └── index.ts
+│   ├── Dockerfile
+│   ├── package.json
+│   └── tsconfig.json
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── intake/
+│   │   │   │   └── page.tsx
+│   │   │   ├── lezen/
+│   │   │   │   └── page.tsx
+│   │   │   ├── dashboard/
+│   │   │   │   └── page.tsx
+│   │   │   ├── settings/
+│   │   │   │   └── page.tsx
+│   │   │   └── subscription/
+│   │   │       └── page.tsx
+│   │   ├── components/
+│   │   │   ├── ui/
+│   │   │   ├── intake/
+│   │   │   ├── reading/
+│   │   │   └── dashboard/
+│   │   ├── lib/
+│   │   │   ├── trpc.ts
+│   │   │   └── utils.ts
+│   │   └── styles/
+│   │       └── globals.css
+│   ├── public/
+│   │   ├── manifest.json
+│   │   ├── sw.js
+│   │   └── icons/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── tailwind.config.ts
+│   └── tsconfig.json
+├── database/
+│   └── init.sql
+├── scripts/
+│   └── backup.sh
+├── backups/
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+---
+
+## Configuration Files
+
+### package.json (Backend)
+```json
+{
+  "name": "leeswijs-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start:prod": "node dist/index.js",
+    "db:migrate": "prisma migrate deploy",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.0.0",
+    "@trpc/server": "^11.7.1",
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@sendgrid/mail": "^8.1.0",
+    "@mollie/api-client": "^4.0.0",
+    "cron": "^3.1.0",
+    "ioredis": "^5.4.0",
+    "zod": "^3.23.0"
+  }
+}
+```
+
+### package.json (Frontend)
+```json
+{
+  "name": "leeswijs-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^16.0.10",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "@trpc/client": "^11.7.1",
+    "@trpc/react-query": "^11.7.1",
+    "@tanstack/react-query": "^5.62.0",
+    "tailwindcss": "^4.1.0",
+    "next-auth": "^5.0.0"
+  }
+}
+```
+
+---
+
+## Success Criteria
+
+1. Users can complete intake wizard and receive AI-generated personalized reading plan
+2. Users can read daily passages and mark them complete
+3. Streak system accurately tracks consecutive reading days
+4. Daily email reminders sent at user-preferred times
+5. PWA works offline with cached readings
+6. Subscription payments process correctly via Mollie
+7. All UI is in Dutch
+8. Application is accessible (WCAG 2.1 AA)
+9. Page load time under 3 seconds
+10. AI plan generation under 30 seconds
+
+---
+
+## Sources
+
+Technology versions researched December 2025:
+- Next.js 16: https://nextjs.org/blog/next-16
+- React 19.2: https://react.dev/blog/2025/10/01/react-19-2
+- tRPC 11: https://trpc.io/blog/announcing-trpc-v11
+- Tailwind CSS 4: https://tailwindcss.com/blog/tailwindcss-v4
+- PostgreSQL 18: https://www.postgresql.org/about/news/postgresql-18-released-3142/
+- Prisma 7: https://www.prisma.io/changelog
+- Clerk: https://clerk.com/changelog

@@ -32,7 +32,9 @@ from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
 from github_cache import GitHubCache
 from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
-from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project
+from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project, set_project_context
+from github_config import save_repo_info, get_repo_info, DEFAULT_GITHUB_ORG, GITHUB_ISSUE_LIST_LIMIT
+from token_rotator import TokenRotator, get_rotator, set_rotator
 import re
 import json
 
@@ -127,7 +129,7 @@ def check_session_mandatory_outcomes(project_dir: Path, session_start_time: date
     try:
         # Check for recently closed issues (within last hour)
         check_result = subprocess.run(
-            ['gh', 'issue', 'list', '--state', 'closed', '--json', 'number,closedAt', '--limit', '20'],
+            ['gh', 'issue', 'list', '--state', 'closed', '--json', 'number,closedAt', '--limit', str(GITHUB_ISSUE_LIST_LIMIT)],
             cwd=project_dir,
             capture_output=True,
             text=True,
@@ -355,6 +357,41 @@ def analyze_session_health(response: str, session_id: str, logger: logging.Logge
                 logger.warning(f"Health check: Stall indicator detected matching pattern: {pattern}")
             break
 
+    # Check 7: Look for rate limit indicators
+    rate_limit_patterns = [
+        r'(?i)rate.?limit',
+        r'(?i)\b429\b',
+        r'(?i)too many requests',
+        r'(?i)quota.*exceeded',
+        r'(?i)exceeded.*quota',
+        r'(?i)usage.?limit',
+        r'(?i)capacity',
+        r'(?i)overloaded',
+        r'(?i)approaching.*limit',
+        r'(?i)limit.*reached',
+    ]
+
+    health_status['rate_limit_detected'] = False
+    for pattern in rate_limit_patterns:
+        if re.search(pattern, response_str):
+            health_status['rate_limit_detected'] = True
+            health_status['warnings'].append(f"Rate limit detected in response: {pattern}")
+            if logger:
+                logger.warning(f"Health check: Rate limit indicator detected matching pattern: {pattern}")
+
+            # Trigger token rotation
+            try:
+                rotator = get_rotator()
+                old_token = rotator.current_name
+                rotator.rotate(reason="rate limit detected in response text")
+                if logger:
+                    logger.warning(f"Token rotated: {old_token} -> {rotator.current_name}")
+                print(f"\n⚠️  Rate limit detected in response! Switched token: {old_token} -> {rotator.current_name}")
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to rotate token after rate limit detection: {e}")
+            break
+
     if logger and health_status['is_healthy']:
         logger.info(f"Health check PASSED: {health_status['tool_calls_count']} tool calls, {health_status['response_length']} chars")
 
@@ -504,6 +541,7 @@ async def run_agent_session(client: ClaudeSDKClient, prompt: str, project_dir: P
 
     except Exception as e:
         session_duration = time.time() - session_start_time
+        error_str = str(e).lower()
 
         logger.error("="*80)
         logger.error(f"ERROR DURING SESSION (duration: {session_duration:.2f}s)")
@@ -513,6 +551,23 @@ async def run_agent_session(client: ClaudeSDKClient, prompt: str, project_dir: P
         logger.error(traceback.format_exc())
         logger.error("="*80)
 
+        # Check for rate limit errors and rotate token if needed
+        rate_limit_indicators = [
+            "rate limit", "rate_limit", "429", "too many requests",
+            "quota exceeded", "usage limit", "overloaded", "capacity"
+        ]
+        is_rate_limit = any(indicator in error_str for indicator in rate_limit_indicators)
+
+        if is_rate_limit:
+            try:
+                rotator = get_rotator()
+                old_token = rotator.current_name
+                rotator.rotate(reason="rate limit error in session")
+                logger.warning(f"Rate limit detected! Rotated token: {old_token} -> {rotator.current_name}")
+                print(f"\n⚠️  Rate limit hit! Switched to: {rotator.current_name}")
+            except Exception as rotate_error:
+                logger.error(f"Failed to rotate token: {rotate_error}")
+
         print(f"\n❌ Error during session: {e}")
 
         # Create unhealthy status for error cases
@@ -521,7 +576,8 @@ async def run_agent_session(client: ClaudeSDKClient, prompt: str, project_dir: P
             'warnings': [f"Session exception: {type(e).__name__}: {str(e)}"],
             'tool_calls_count': 0,
             'response_length': 0,
-            'has_content': False
+            'has_content': False,
+            'rate_limit_detected': is_rate_limit
         }
 
         return "error", str(e), error_health_status
@@ -558,6 +614,15 @@ async def ensure_git_and_github_repo(project_dir: Path, logger: logging.Logger):
             )
             remote_url = result.stdout.strip()
             logger.info(f"Remote origin configured: {remote_url}")
+
+            # Extract and save repo info from remote URL
+            # URL format: https://github.com/org/repo.git or git@github.com:org/repo.git
+            repo_match = re.search(r'github\.com[:/]([^/]+/[^/\.]+)', remote_url)
+            if repo_match:
+                repo_name = repo_match.group(1)
+                save_repo_info(project_dir, repo_name)
+                logger.info(f"Saved repo info: {repo_name}")
+
             return
         except subprocess.CalledProcessError:
             logger.warning("No remote origin configured, will try to set one up")
@@ -599,7 +664,6 @@ async def ensure_git_and_github_repo(project_dir: Path, logger: logging.Logger):
                 # Look for brand names (common patterns)
                 if any(indicator in clean_line.lower() for indicator in ['.nl', '.com', 'brand']):
                     # Extract domain-like names
-                    import re
                     domain_matches = re.findall(r'\b([A-Za-z]+(?:\.nl|\.com|\.io))\b', clean_line)
                     brands.extend(domain_matches)
 
@@ -728,6 +792,11 @@ async def ensure_git_and_github_repo(project_dir: Path, logger: logging.Logger):
         else:
             print(f"✅ Created repository: {org_name}/{repo_name}")
             logger.info(f"Successfully created repository: {org_name}/{repo_name}")
+
+        # Save repo info for use in prompts (prevents wrong repo issues)
+        full_repo_name = f"{org_name}/{repo_name}"
+        save_repo_info(project_dir, full_repo_name, org_name)
+        logger.info(f"Saved repo info: {full_repo_name}")
 
     except Exception as e:
         print(f"❌ Error creating GitHub repository: {e}")
@@ -910,6 +979,19 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
     logger.debug("Checking git repository status")
     await ensure_git_and_github_repo(project_dir, logger)
 
+    # Set project context for prompt injection (CRITICAL for correct repo targeting)
+    repo_info = get_repo_info(project_dir)
+    if repo_info.get('repo'):
+        set_project_context(
+            project_dir=project_dir,
+            repo=repo_info['repo'],
+            repo_url=repo_info.get('repo_url')
+        )
+        logger.info(f"Project context set: repo={repo_info['repo']}")
+    else:
+        set_project_context(project_dir=project_dir)
+        logger.warning("No repo info found - gh commands may target wrong repo!")
+
     # Initialize GitHub integration
     logger.debug("Initializing GitHub cache and integration")
     cache = GitHubCache(project_dir)
@@ -993,6 +1075,15 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
                 # This prevents context accumulation that causes API 400 errors
                 print("Creating fresh Claude Code client for this session...")
                 logger.info(f"Creating new client for iteration {iteration}")
+
+                # Sync token to environment before creating client
+                try:
+                    rotator = get_rotator()
+                    rotator.sync_env()
+                    logger.info(f"Using token: {rotator.current_name} ({rotator.current.auth_type.value})")
+                except Exception as e:
+                    logger.warning(f"Token sync failed: {e}")
+
                 client_creation_start = time.time()
                 client = ClaudeSDKClient(options=client_options)
                 client_creation_duration = time.time() - client_creation_start
@@ -1005,9 +1096,34 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
 
                 # Client is now closed, context is cleared
 
-                # Check if session is unhealthy and retry once if needed
+                # Check if rate limit was detected and retry with new token
                 retry_attempted = False
-                if not health_status['is_healthy'] and status != "error":
+                if health_status.get('rate_limit_detected', False):
+                    logger.warning("Rate limit detected in session. Token already rotated. Retrying with new token...")
+                    print("\n⚠️  Rate limit hit! Retrying with new token...\n")
+                    retry_attempted = True
+
+                    # Wait a bit to let rate limit cooldown
+                    await asyncio.sleep(3)
+
+                    # Retry with the same prompt but new token (already rotated in health check)
+                    retry_session_id = f"{session_id}_ratelimit_retry"
+
+                    # Create fresh client with new token
+                    logger.info("Creating fresh client with rotated token for rate limit retry")
+                    retry_client = ClaudeSDKClient(options=client_options)
+                    async with retry_client:
+                        status, response, health_status = await run_agent_session(retry_client, prompt, project_dir, logger, retry_session_id)
+
+                    if health_status.get('rate_limit_detected', False):
+                        logger.error("Rate limit hit again after token rotation. All tokens may be exhausted.")
+                        print("\n❌ Rate limit hit again. All tokens may be rate limited.\n")
+                    else:
+                        logger.info("Rate limit retry succeeded with new token")
+                        print("\n✅ Retry with new token successful\n")
+
+                # Check if session is unhealthy and retry once if needed
+                elif not health_status['is_healthy'] and status != "error":
                     logger.warning("Session appears unhealthy. Attempting one retry...")
                     print("\n⚠️  Session appears to have stalled. Retrying once...\n")
                     retry_attempted = True
@@ -1153,10 +1269,19 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate token
-    if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
-        print("❌ Error: CLAUDE_CODE_OAUTH_TOKEN not set")
-        print("Run: claude setup-token")
+    # Initialize token rotator (supports multiple tokens for rate limit handling)
+    try:
+        rotator = TokenRotator.from_env(env_file=Path.cwd() / ".env")
+        rotator.sync_env()
+        set_rotator(rotator)
+        print(f"✓ Token rotator initialized with {len(rotator.tokens)} token(s)")
+        print(f"  Current: {rotator.current_name} ({rotator.current.auth_type.value})")
+    except ValueError as e:
+        print(f"❌ Error: {e}")
+        print("\nSet one of:")
+        print("  - CLAUDE_CODE_OAUTH_TOKEN (for Claude Max subscription)")
+        print("  - ANTHROPIC_API_KEY (for API credits)")
+        print("\nSee .env.example for backup token naming conventions")
         sys.exit(1)
 
     # Validate gh CLI

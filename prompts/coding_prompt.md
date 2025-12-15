@@ -5,6 +5,9 @@ This is a FRESH context window - you have no memory of previous sessions.
 
 GitHub Issues are your source of truth for what needs to be built and completed.
 
+**CRITICAL: Use `--repo` flag with ALL `gh` commands!**
+See the PROJECT CONTEXT section above for the exact repo name to use.
+
 **CRITICAL TURN MANAGEMENT:** You have 50 turns MAX.
 - Turns 1-5: Orientation
 - Turns 6-35: Implementation (pick ONE issue, implement it, CLOSE it)
@@ -42,15 +45,16 @@ GitHub Issues are your source of truth for what needs to be built and completed.
 
 ## PHASE 1: QUICK ORIENTATION (Turns 1-5)
 
-Run these commands in parallel:
+Run these commands (use --repo flag from PROJECT CONTEXT above):
 
 ```bash
 # All in one command block for efficiency
+# IMPORTANT: Replace REPO with the repo from PROJECT CONTEXT section!
 pwd && ls -la
-gh issue list --state all --json number,state | jq '[group_by(.state)[] | {state: .[0].state, count: length}]'
-gh issue list --search "[META]" --json number,title --limit 1
-gh issue list --state open --label "priority:urgent" --json number,title --limit 5
-gh issue list --state open --label "priority:high" --json number,title --limit 5
+gh issue list --repo REPO --state all --json number,state | jq '[group_by(.state)[] | {state: .[0].state, count: length}]'
+gh issue list --repo REPO --search "[META]" --json number,title --limit 1
+gh issue list --repo REPO --state open --label "priority:urgent" --json number,title --limit 5
+gh issue list --repo REPO --state open --label "priority:high" --json number,title --limit 5
 ```
 
 **No META issue?** Create one immediately using the initializer template.
@@ -68,8 +72,8 @@ gh issue list --state open --label "priority:high" --json number,title --limit 5
 4. Avoid issues that need external services you can't test
 
 ```bash
-# View the issue you're selecting
-gh issue view <ISSUE_NUMBER>
+# View the issue you're selecting (use --repo from PROJECT CONTEXT)
+gh issue view <ISSUE_NUMBER> --repo REPO
 ```
 
 **Announce your choice:** "I'm working on issue #X: [title]"
@@ -100,8 +104,8 @@ Even if the implementation isn't 100% complete, CLOSE the issue if it's mostly w
 A closed issue with 80% done is better than an open issue that's 100% done.
 
 ```bash
-# Step 1: Add implementation comment
-gh issue comment <ISSUE_NUMBER> --body "$(cat <<'EOF'
+# Step 1: Add implementation comment (use --repo from PROJECT CONTEXT)
+gh issue comment <ISSUE_NUMBER> --repo REPO --body "$(cat <<'EOF'
 ## Implementation Complete
 
 ### Changes Made
@@ -116,10 +120,10 @@ EOF
 )"
 
 # Step 2: CLOSE THE ISSUE - THIS IS MANDATORY!
-gh issue close <ISSUE_NUMBER>
+gh issue close <ISSUE_NUMBER> --repo REPO
 
 # Step 3: Verify closure
-gh issue view <ISSUE_NUMBER> --json state -q '.state'
+gh issue view <ISSUE_NUMBER> --repo REPO --json state -q '.state'
 # MUST show: "CLOSED"
 
 echo "Issue #<ISSUE_NUMBER> is now CLOSED"
@@ -147,17 +151,17 @@ Otherwise, skip to Phase 6.
 ### Step 6A: Update META Issue
 
 ```bash
-# Find META issue
-META_ISSUE=$(gh issue list --search "[META]" --json number -q '.[0].number')
+# Find META issue (use --repo from PROJECT CONTEXT)
+META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
 
-# Get counts
-OPEN=$(gh issue list --state open --json number | jq 'length')
-CLOSED=$(gh issue list --state closed --json number | jq 'length')
+# Get counts (use --limit 10000 to handle large projects)
+OPEN=$(gh issue list --repo REPO --state open --json number --limit 10000 | jq 'length')
+CLOSED=$(gh issue list --repo REPO --state closed --json number --limit 10000 | jq 'length')
 TOTAL=$((OPEN + CLOSED))
 PERCENT=$((CLOSED * 100 / TOTAL))
 
 # Post update
-gh issue comment $META_ISSUE --body "$(cat <<EOF
+gh issue comment $META_ISSUE --repo REPO --body "$(cat <<EOF
 ## Session Update - $(date '+%Y-%m-%d %H:%M')
 
 ### This Session
@@ -210,8 +214,8 @@ If you're at turn 40+ and haven't closed an issue or updated META:
 
 1. Close whatever issue you were working on (even if incomplete):
    ```bash
-   gh issue comment <NUM> --body "Partial implementation - next session will continue"
-   gh issue close <NUM>
+   gh issue comment <NUM> --repo REPO --body "Partial implementation - next session will continue"
+   gh issue close <NUM> --repo REPO
    ```
 
 2. Update META issue with progress
@@ -229,13 +233,13 @@ Before your session ends, verify:
 ```bash
 echo "=== FINAL VERIFICATION ==="
 
-# 1. At least one issue closed?
-CLOSED_RECENTLY=$(gh issue list --state closed --json number,closedAt | jq '[.[] | select(.closedAt > (now - 3600 | todate))] | length')
+# 1. At least one issue closed? (use --repo from PROJECT CONTEXT)
+CLOSED_RECENTLY=$(gh issue list --repo REPO --state closed --json number,closedAt --limit 500 | jq '[.[] | select(.closedAt > (now - 3600 | todate))] | length')
 echo "Issues closed this hour: $CLOSED_RECENTLY"
 [ "$CLOSED_RECENTLY" -ge 1 ] && echo "PASS: Issue closed" || echo "FAIL: No issue closed!"
 
 # 2. META issue updated?
-META=$(gh issue list --search "[META]" --json number -q '.[0].number')
+META=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
 echo "META issue: #$META"
 
 # 3. Git status clean?
@@ -266,3 +270,74 @@ echo "=== END VERIFICATION ==="
 - **Always pull before push**
 - **Reserve turns 46-50 for mandatory finish steps**
 - **If stuck on an issue for 15+ turns, close it as incomplete and move on**
+
+---
+
+## TDD & VERIFICATION (When Constitution Requires)
+
+If the project constitution enables TDD or verification requirements, follow this workflow:
+
+### Test-Driven Development (If TDD Enabled)
+
+1. **Write Test First (RED)**
+   ```bash
+   # Create test file BEFORE implementation
+   # Test should initially FAIL
+   npm test -- --run
+   ```
+
+2. **Implement Minimal Solution (GREEN)**
+   - Write just enough code to make test pass
+   - Keep implementation simple
+
+3. **Refactor (Optional)**
+   - Clean up while tests stay green
+
+### Verification Before Closing Issue
+
+Before closing any issue, verify your implementation works:
+
+```bash
+# 1. Run tests (if test infrastructure exists)
+npm test -- --run 2>/dev/null || python -m pytest 2>/dev/null || echo "No test framework"
+
+# 2. Run linting (if configured)
+npm run lint 2>/dev/null || echo "No linting configured"
+
+# 3. Build check (if applicable)
+npm run build 2>/dev/null || echo "No build step"
+
+# 4. Quick functionality check
+# For API endpoints:
+curl -s http://localhost:3000/api/health | jq .
+
+# For web pages:
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+```
+
+### Browser Verification (If Required by Constitution)
+
+If constitution requires browser testing:
+
+```bash
+# Option 1: Simple curl check
+curl -s http://localhost:3000 | grep -q "expected text"
+
+# Option 2: MCP Puppeteer (if available)
+# mcp puppeteer navigate http://localhost:3000
+# mcp puppeteer screenshot ./verify.png
+
+# Option 3: Playwright (if installed)
+npx playwright test --grep "smoke"
+```
+
+### Verification Checklist
+
+Before closing an issue:
+- [ ] Implementation matches acceptance criteria
+- [ ] Tests pass (if TDD enabled)
+- [ ] Lint passes (if required)
+- [ ] Build succeeds (if required)
+- [ ] Manual verification done (if UI change)
+
+**Note:** Skip verification steps not required by constitution. Quick implementations don't need full test suites.

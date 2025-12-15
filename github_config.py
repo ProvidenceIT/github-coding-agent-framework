@@ -51,3 +51,75 @@ META_ISSUE_TITLE = "[META] Project Progress Tracker"
 # GitHub API rate limit (more generous than Linear)
 GITHUB_RATE_LIMIT_HOURLY = 5000
 GITHUB_RATE_LIMIT_WARNING_THRESHOLD = 0.8  # Warn at 80%
+
+# Default limit for gh issue list commands
+# The default gh limit is 30, which is too low for larger projects
+# Use 10000 to effectively get all issues (most projects have < 1000)
+GITHUB_ISSUE_LIST_LIMIT = 10000
+
+# Default GitHub organization for new repos
+DEFAULT_GITHUB_ORG = "ProvidenceIT"
+
+
+def get_repo_info(project_dir) -> dict:
+    """
+    Get GitHub repo info from project's .github_project.json.
+
+    Returns:
+        dict with 'repo' (owner/name) and 'org' keys, or empty dict if not found
+    """
+    import json
+    from pathlib import Path
+
+    project_file = Path(project_dir) / GITHUB_PROJECT_MARKER
+    if project_file.exists():
+        try:
+            with open(project_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return {
+                    'repo': data.get('repo', ''),
+                    'org': data.get('org', DEFAULT_GITHUB_ORG),
+                    'repo_url': data.get('repo_url', '')
+                }
+        except Exception:
+            pass
+    return {}
+
+
+def save_repo_info(project_dir, repo: str, org: str = None):
+    """
+    Save GitHub repo info to project's .github_project.json.
+
+    Args:
+        project_dir: Project directory path
+        repo: Full repo name (org/repo-name)
+        org: Organization name (extracted from repo if not provided)
+    """
+    import json
+    from pathlib import Path
+    from datetime import datetime
+
+    project_file = Path(project_dir) / GITHUB_PROJECT_MARKER
+
+    # Load existing data or create new
+    data = {}
+    if project_file.exists():
+        try:
+            with open(project_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            pass
+
+    # Extract org from repo if not provided
+    if not org and '/' in repo:
+        org = repo.split('/')[0]
+
+    # Update repo info
+    data['repo'] = repo
+    data['org'] = org or DEFAULT_GITHUB_ORG
+    data['repo_url'] = f"https://github.com/{repo}"
+    data['repo_updated_at'] = datetime.now().isoformat()
+
+    # Save
+    with open(project_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)

@@ -1,0 +1,780 @@
+# ServerWatch - Server & Website Monitoring Platform
+
+## Project Overview
+
+ServerWatch is a modern, affordable monitoring solution for servers and websites. It's a direct competitor to 360 Monitoring with better price/quality ratio (€9.99 vs €24.99/month) and more flexibility. Specific focus on Plesk servers and Dutch hosting market.
+
+**Target Market:** Dutch web agencies, freelance developers, system administrators, and small hosting providers.
+
+**Core Value Proposition:** Enterprise-grade monitoring at SMB prices with unlimited website monitors, faster check intervals (30sec vs 1min), and better alerting options.
+
+## Technology Stack
+
+### Frontend
+- **Framework:** Next.js 14 (App Router)
+- **Styling:** Tailwind CSS + shadcn/ui components
+- **Charts:** Recharts for metrics visualization
+- **State:** React Query (TanStack Query) for server state
+- **Forms:** React Hook Form + Zod validation
+
+### Backend
+- **Framework:** Fastify (Node.js)
+- **ORM:** Prisma
+- **Queue:** BullMQ (Redis-backed)
+- **Auth:** JWT with refresh tokens + magic links
+
+### Database
+- **Primary:** PostgreSQL 15 with TimescaleDB extension
+- **Cache/Queue:** Redis 7
+
+### External Services
+- **Email:** SendGrid
+- **SMS:** Twilio
+- **Payments:** Stripe
+- **Distributed Checks:** Cloudflare Workers
+
+### Infrastructure
+- **Containerization:** Docker Compose
+- **Server:** Hetzner Dedicated with Plesk
+- **CDN/DNS:** Cloudflare
+- **CI/CD:** GitHub Actions
+
+## Features
+
+### Phase 1: Foundation & Infrastructure
+
+#### 1. Docker Compose Setup
+Create production-ready Docker Compose configuration with services:
+- Frontend (Next.js on port 3000)
+- Backend (Fastify on port 5000)
+- Worker (BullMQ job processor)
+- Scheduler (Cron-based check dispatcher)
+- PostgreSQL with TimescaleDB
+- Redis with persistence
+Include health checks, network configuration, volume mounts, and environment variables.
+
+#### 2. Database Schema - Core Tables
+Implement PostgreSQL schema with Prisma:
+- Organizations table (multi-tenant, Stripe fields, subscription tier)
+- Users table (org relationship, password hash, email verification)
+- Proper indexes and foreign key constraints
+Include UUID generation and timestamps.
+
+#### 3. Database Schema - Monitors & Results
+Create monitoring-specific tables:
+- Monitors table (URL, type, method, timeout, interval, expected status codes, SSL config, locations)
+- Check_results hypertable (TimescaleDB time-series, response time, status code, error message, SSL days, timing breakdown)
+Configure compression policy (7 days) and retention policy (90 days).
+
+#### 4. Database Schema - Servers & Metrics
+Create server monitoring tables:
+- Servers table (agent token, OS info, status, last seen)
+- Server_metrics hypertable (CPU, memory, disk, network, load averages)
+Configure TimescaleDB policies for efficient storage.
+
+#### 5. Database Schema - Alerts & Incidents
+Create alerting infrastructure:
+- Alert_channels table (type, config JSON, enabled flag)
+- Monitor_alert_channels junction table
+- Incidents table (start/end times, cause, status)
+- Alerts_sent history table
+
+#### 6. Database Schema - Status Pages & API Keys
+Create additional feature tables:
+- Status_pages table (slug, custom domain, branding options)
+- Status_page_monitors junction table
+- API_keys table (hashed key, prefix, permissions, expiry)
+
+### Phase 2: Authentication & Authorization
+
+#### 7. User Registration API
+Implement POST /api/auth/register endpoint:
+- Organization creation with unique slug
+- User creation with password hashing (bcrypt)
+- Email verification token generation
+- SendGrid welcome email with verification link
+Validate email format and password strength.
+
+#### 8. Magic Link Authentication
+Implement passwordless login:
+- POST /api/auth/magic-link (request magic link)
+- GET /api/auth/verify-magic (verify token, issue JWT)
+- Store tokens with 15-minute expiry
+- SendGrid email template with branded link
+
+#### 9. Password Authentication
+Implement traditional login:
+- POST /api/auth/login (email/password)
+- Password verification with bcrypt
+- JWT access token (15min) and refresh token (7days)
+- Rate limiting (5 attempts per minute)
+
+#### 10. JWT Token Management
+Implement token infrastructure:
+- Access token validation middleware
+- POST /api/auth/refresh endpoint
+- Token revocation (Redis blacklist)
+- Automatic token refresh in frontend
+
+#### 11. Organization Context Middleware
+Create multi-tenant middleware:
+- Extract organization from JWT
+- Inject org context into all requests
+- Scope all queries to current organization
+- Permission checking (owner/admin/member roles)
+
+#### 12. Frontend Auth Context
+Implement React auth provider:
+- Login/logout functions
+- Token storage (httpOnly cookies preferred)
+- Auto-refresh logic
+- Protected route wrapper component
+
+### Phase 3: Monitor Management
+
+#### 13. Monitor CRUD API
+Implement monitor endpoints:
+- GET /api/monitors (list with pagination, filtering)
+- POST /api/monitors (create with validation)
+- GET /api/monitors/:id (single monitor with stats)
+- PUT /api/monitors/:id (update)
+- DELETE /api/monitors/:id (soft delete, preserve history)
+Enforce organization limits based on subscription tier.
+
+#### 14. HTTP/HTTPS Monitor Configuration
+Support HTTP check options:
+- URL validation and normalization
+- HTTP methods (GET, POST, HEAD, OPTIONS)
+- Custom headers (JSON)
+- Request body for POST/PUT
+- Expected status codes array
+- Expected body content matching (substring/regex)
+- Timeout configuration (1-60 seconds)
+
+#### 15. SSL Certificate Monitoring
+Implement SSL-specific checks:
+- Certificate expiry date extraction
+- Days-until-expiry calculation
+- Configurable warning threshold (default 14 days)
+- Certificate chain validation
+- SSL protocol version detection
+
+#### 16. TCP/ICMP Monitor Support
+Add non-HTTP monitoring types:
+- TCP port check with connection timeout
+- ICMP ping (via external service or privileged worker)
+- DNS resolution monitoring
+- Port range scanning option
+
+#### 17. Monitor Location Selection
+Implement distributed check locations:
+- Location picker UI (checkboxes for regions)
+- Available locations: Amsterdam, Frankfurt, London, Paris, New York, San Jose, Singapore, Sydney
+- Minimum 1 location required
+- Premium tiers get more locations
+
+#### 18. Monitor Dashboard Card Component
+Create monitor list item component:
+- Status indicator (green/yellow/red dot)
+- Monitor name and URL
+- Current response time with trend arrow
+- Uptime percentage (24h/7d/30d toggle)
+- Last check timestamp
+- Quick actions (pause, edit, delete)
+
+#### 19. Monitor Detail Page
+Create comprehensive monitor view:
+- Response time chart (line graph, 24h/7d/30d)
+- Uptime percentage visualization
+- Location-wise performance breakdown
+- Recent incidents list
+- SSL certificate info card
+- Alert channel configuration
+
+### Phase 4: Distributed Check System
+
+#### 20. Cloudflare Worker - Ping Service
+Implement edge worker for HTTP checks:
+- Accept batch check requests via POST
+- Perform fetch with timeout and timing
+- Collect metrics (DNS, connect, TLS, TTFB)
+- Return structured results
+- Auth via bearer token
+Deploy to multiple CF edge locations.
+
+#### 21. Worker Results Webhook
+Create backend endpoint for worker results:
+- POST /api/internal/check-results
+- Validate worker auth token
+- Batch insert to TimescaleDB
+- Trigger alert evaluation
+- Update monitor current_state
+
+#### 22. Check Scheduler Service
+Implement BullMQ scheduler:
+- Query monitors due for checking
+- Group by check interval (15s, 30s, 1min, 5min)
+- Dispatch to appropriate CF worker locations
+- Handle rate limiting per organization
+- Track scheduled vs completed checks
+
+#### 23. Pending Checks API
+Create endpoint for workers to fetch work:
+- GET /api/internal/pending-checks
+- Return monitors ready for checking
+- Filter by location assignment
+- Include full check configuration
+- Mark as dispatched (prevent duplicate checks)
+
+#### 24. Check Result Processing
+Implement result handler:
+- Calculate status (up/down/degraded)
+- Update consecutive failure count
+- Detect state transitions
+- Create incidents on threshold breach
+- Update last_check_at timestamp
+
+### Phase 5: Alert System
+
+#### 25. Alert Channel CRUD
+Implement channel management:
+- GET/POST/PUT/DELETE /api/alert-channels
+- Channel types: email, slack, discord, telegram, webhook, sms, pagerduty
+- Type-specific config validation
+- Test notification endpoint
+- Enable/disable toggle
+
+#### 26. Email Alert Integration (SendGrid)
+Implement email alerts:
+- Down notification template (red, urgent)
+- Up notification template (green, recovery)
+- Include: monitor name, URL, error message, timestamp
+- Configurable recipient list
+- Unsubscribe link per channel
+
+#### 27. Slack Alert Integration
+Implement Slack notifications:
+- Webhook URL configuration
+- Rich message blocks (status, details, link)
+- Color coding (red/green/yellow)
+- Action buttons (acknowledge, view details)
+- Channel mention option (@here, @channel)
+
+#### 28. Discord Alert Integration
+Implement Discord notifications:
+- Webhook URL with username/avatar
+- Embed message format
+- Color-coded status
+- Timestamp and footer
+- Link to dashboard
+
+#### 29. Telegram Alert Integration
+Implement Telegram bot alerts:
+- Bot token and chat ID configuration
+- Markdown formatted messages
+- Inline keyboard for quick actions
+- Photo attachment option (screenshot on error)
+
+#### 30. SMS Alert Integration (Twilio)
+Implement SMS notifications:
+- Twilio client configuration
+- Phone number validation (E.164)
+- Concise message format (160 chars)
+- Rate limiting (max 10/hour default)
+- Premium tier only
+
+#### 31. Webhook Alert Integration
+Implement custom webhooks:
+- POST to custom URL
+- JSON payload with full incident data
+- Custom headers support
+- Retry logic (3 attempts, exponential backoff)
+- Signature verification (HMAC)
+
+#### 32. Alert Routing Engine
+Implement alert dispatcher:
+- Query channels for monitor
+- Evaluate escalation rules
+- Send to all enabled channels
+- Record in alerts_sent table
+- Handle failures gracefully
+
+#### 33. Alert Cooldown Logic
+Prevent alert fatigue:
+- Configurable cooldown period (default 5 min)
+- Don't re-alert during cooldown
+- Reset cooldown on state change
+- Separate cooldown for down vs up
+
+### Phase 6: Incident Management
+
+#### 34. Incident Detection
+Implement incident creation logic:
+- Threshold-based detection (n consecutive failures)
+- Confirmation checks from multiple locations
+- Auto-create incident record
+- Set initial cause/error message
+- Link to triggering monitor
+
+#### 35. Incident Timeline
+Create incident history:
+- State change events
+- Alert sent events
+- User acknowledgments
+- Comments/notes
+- Resolution timestamp and cause
+
+#### 36. Incident Resolution
+Implement auto-resolution:
+- Detect recovery (success after failure)
+- Update incident resolved_at
+- Send recovery notifications
+- Calculate total downtime
+- Update monitor statistics
+
+#### 37. Incident List Page
+Create incident management UI:
+- Filter by status (ongoing, resolved)
+- Filter by monitor, date range
+- Sort by start time, duration
+- Quick actions (acknowledge, resolve)
+- Bulk operations
+
+### Phase 7: Billing & Subscriptions
+
+#### 38. Stripe Customer Creation
+Implement Stripe integration:
+- Create customer on organization signup
+- Store stripe_customer_id
+- Sync customer email and metadata
+- Handle webhook for customer updates
+
+#### 39. Subscription Plans Configuration
+Define pricing tiers in Stripe:
+- Free: €0, 5 monitors, 1 server, 5min interval
+- Starter: €4.99, 25 monitors, 5 servers, 1min
+- Pro: €9.99, unlimited monitors, 25 servers, 30sec
+- Business: €24.99, unlimited, 100 servers, 15sec
+Create Stripe Products and Prices.
+
+#### 40. Checkout Flow
+Implement subscription purchase:
+- Stripe Checkout Session creation
+- Success/cancel redirect URLs
+- Apply subscription on success webhook
+- Update organization limits
+- Welcome email with receipt
+
+#### 41. Subscription Management
+Implement self-service billing:
+- Current plan display
+- Usage statistics (monitors, servers used)
+- Upgrade/downgrade options
+- Billing portal link (Stripe)
+- Invoice history
+
+#### 42. Usage Enforcement
+Implement limit checking:
+- Middleware to check limits before create
+- Graceful handling (don't break existing)
+- Warning emails at 80% usage
+- Upgrade prompts in UI
+- Grace period for downgrades
+
+#### 43. Webhook Handler for Billing Events
+Handle Stripe webhooks:
+- checkout.session.completed
+- customer.subscription.updated
+- customer.subscription.deleted
+- invoice.payment_failed
+- Proper signature verification
+
+### Phase 8: Dashboard & Analytics
+
+#### 44. Main Dashboard Overview
+Create dashboard home:
+- Summary cards (total monitors, up/down/paused)
+- Overall uptime percentage
+- Recent incidents feed
+- Response time heatmap
+- Quick add monitor button
+
+#### 45. Response Time Charts
+Implement charting:
+- Line chart with multiple locations
+- Time range selector (1h, 24h, 7d, 30d)
+- Average, P95, P99 statistics
+- Comparison with previous period
+- Export to PNG/CSV
+
+#### 46. Uptime Statistics
+Calculate and display uptime:
+- Per-monitor uptime percentage
+- Daily/weekly/monthly breakdown
+- SLA compliance indicator
+- Downtime minutes calculation
+- Historical trend
+
+#### 47. Location Performance Map
+Create geographic visualization:
+- World map with location pins
+- Response time per location
+- Color-coded performance
+- Hover for details
+- Best/worst location highlight
+
+#### 48. Real-time Updates
+Implement live dashboard:
+- WebSocket connection for updates
+- Or polling fallback (30 sec interval)
+- Toast notifications for status changes
+- Sound alert option for down events
+- Activity indicator
+
+### Phase 9: Status Pages
+
+#### 49. Status Page Creation
+Implement status page CRUD:
+- Unique slug configuration
+- Name and description
+- Logo and favicon upload
+- Color theme selection
+- Public/private toggle
+
+#### 50. Status Page Monitor Assignment
+Configure page content:
+- Select monitors to display
+- Custom display names
+- Display order (drag and drop)
+- Group monitors by category
+- Show/hide uptime percentage
+
+#### 51. Public Status Page Rendering
+Create public-facing page:
+- Clean, minimal design
+- All systems operational banner
+- Individual component status
+- 90-day uptime graph per component
+- Past incidents list
+- Subscribe to updates link
+
+#### 52. Status Page Custom Domain
+Support custom domains:
+- CNAME configuration instructions
+- SSL certificate via Cloudflare
+- Domain verification
+- Redirect from default subdomain
+
+#### 53. Status Page Incident Updates
+Allow manual updates:
+- Create maintenance windows
+- Post incident updates
+- Status: investigating/identified/monitoring/resolved
+- Notify subscribers
+
+### Phase 10: Server Agent Monitoring
+
+#### 54. Server Registration API
+Implement server onboarding:
+- POST /api/servers (create with generated token)
+- GET /api/servers/:id/agent-install (install script)
+- Unique agent token generation
+- OS detection placeholder
+
+#### 55. Agent Metrics Ingestion
+Create metrics endpoint:
+- POST /api/agent/metrics
+- Auth via agent token
+- Validate metric payload
+- Insert to server_metrics table
+- Update server last_seen_at
+
+#### 56. Server Dashboard
+Create server monitoring UI:
+- Server list with status indicators
+- CPU/Memory/Disk gauges
+- Network I/O graphs
+- Process count
+- Load average display
+
+#### 57. Server Alerts
+Implement server alerting:
+- CPU threshold alerts (>90% for 5min)
+- Memory threshold alerts
+- Disk space warnings (<10% free)
+- Server offline detection
+- Reuse alert channel system
+
+#### 58. Agent Installation Script
+Create easy install:
+- Bash script for Linux
+- PowerShell script for Windows
+- Auto-detect OS and architecture
+- Download agent binary
+- Register as systemd/Windows service
+- Configure with provided token
+
+### Phase 11: API Access
+
+#### 59. API Key Management
+Implement API key CRUD:
+- Generate new keys (show once)
+- List keys (prefix only)
+- Revoke keys
+- Permission scopes (read, write, admin)
+- Expiration date option
+
+#### 60. API Authentication Middleware
+Create API auth:
+- Accept key via X-API-Key header
+- Or via Bearer token
+- Validate key hash
+- Check permissions for endpoint
+- Update last_used_at
+
+#### 61. Public REST API
+Document and expose API:
+- GET /api/v1/monitors
+- GET /api/v1/monitors/:id
+- GET /api/v1/monitors/:id/stats
+- POST /api/v1/monitors
+- PUT /api/v1/monitors/:id
+- DELETE /api/v1/monitors/:id
+Include OpenAPI/Swagger documentation.
+
+#### 62. API Rate Limiting
+Implement rate limits:
+- Per API key limits
+- Tier-based quotas
+- Redis-based counter
+- Return rate limit headers
+- 429 response with retry-after
+
+### Phase 12: Marketing & Landing Page
+
+#### 63. Landing Page Hero Section
+Create compelling hero:
+- Headline: "Monitor Everything, Pay Less"
+- Subheadline with value proposition
+- CTA buttons (Start Free, View Demo)
+- Hero illustration/screenshot
+- Trust badges (uptime, customers)
+
+#### 64. Pricing Section
+Display pricing tiers:
+- Feature comparison table
+- Monthly/yearly toggle (save 20%)
+- Highlight recommended plan
+- Free tier prominent
+- FAQ accordion below
+
+#### 65. Features Section
+Showcase capabilities:
+- Feature cards with icons
+- HTTP/HTTPS monitoring
+- Multi-location checks
+- SSL monitoring
+- Server monitoring
+- Alert channels
+- Status pages
+
+#### 66. Comparison Section
+Compare with competitors:
+- 360 Monitoring comparison table
+- Price difference highlighted
+- "More for Less" messaging
+- Feature parity proof
+- Customer testimonials
+
+#### 67. Footer & Legal Pages
+Create footer and legal:
+- Navigation links
+- Social media links
+- Newsletter signup
+- Privacy policy page
+- Terms of service page
+- GDPR compliance info
+
+### Phase 13: Settings & Administration
+
+#### 68. Organization Settings Page
+Create org settings:
+- Organization name edit
+- Slug configuration
+- Logo upload
+- Default timezone
+- Delete organization (with confirmation)
+
+#### 69. User Profile Settings
+Create user settings:
+- Name and email update
+- Password change
+- Timezone preference
+- Notification preferences
+- Two-factor authentication setup
+
+#### 70. Team Management
+Implement multi-user:
+- Invite team members by email
+- Role assignment (admin, member)
+- Remove team members
+- Resend invitation
+- Activity log per user
+
+#### 71. Notification Preferences
+Create preference center:
+- Email notification settings
+- Alert frequency options
+- Daily/weekly summary emails
+- Marketing email opt-out
+- Per-monitor override option
+
+### Phase 14: Testing & Quality
+
+#### 72. Backend Unit Tests
+Create test suite:
+- Auth endpoint tests
+- Monitor CRUD tests
+- Alert routing tests
+- Billing webhook tests
+- Use Vitest or Jest
+
+#### 73. Frontend Component Tests
+Test UI components:
+- Auth form validation
+- Monitor card rendering
+- Dashboard statistics
+- Chart components
+- Use React Testing Library
+
+#### 74. E2E Tests
+Create integration tests:
+- User registration flow
+- Add monitor and verify check
+- Receive alert on failure
+- Billing flow
+- Use Playwright or Cypress
+
+#### 75. API Documentation
+Generate API docs:
+- OpenAPI 3.0 specification
+- Swagger UI integration
+- Example requests/responses
+- Authentication guide
+- Rate limit documentation
+
+### Phase 15: DevOps & Deployment
+
+#### 76. GitHub Actions CI Pipeline
+Create CI workflow:
+- Run on PR and push to main
+- Lint and type check
+- Run unit tests
+- Build Docker images
+- Push to GitHub Container Registry
+
+#### 77. GitHub Actions CD Pipeline
+Create deployment workflow:
+- Deploy Cloudflare Workers
+- SSH to Plesk server
+- Pull and restart containers
+- Run database migrations
+- Health check verification
+- Slack notification
+
+#### 78. Environment Configuration
+Create env templates:
+- .env.example with all variables
+- Production secrets documentation
+- Cloudflare Worker secrets
+- Stripe webhook setup guide
+
+#### 79. Database Backup Strategy
+Implement backups:
+- pg_dump script for daily backups
+- Upload to S3/B2 storage
+- Retention policy (30 days)
+- Restore documentation
+- Test restore procedure
+
+#### 80. Monitoring & Logging
+Self-monitoring setup:
+- Application logs to stdout
+- Structured JSON logging
+- Error tracking (Sentry optional)
+- Health check endpoint
+- Metrics endpoint for Prometheus
+
+## UI/UX Requirements
+
+### Design System
+- Clean, modern aesthetic similar to Linear/Vercel
+- Color palette: Primary green (#10b981), warning yellow, error red
+- Typography: Inter or system fonts
+- Consistent spacing scale (4px base)
+- Responsive breakpoints: mobile, tablet, desktop
+
+### Key Interactions
+- Loading skeletons for data fetching
+- Optimistic updates for toggles
+- Toast notifications for actions
+- Keyboard shortcuts for power users
+- Empty states with helpful CTAs
+
+### Accessibility
+- WCAG 2.1 AA compliance
+- Keyboard navigation
+- Screen reader support
+- Color contrast ratios
+- Focus indicators
+
+## Security Requirements
+
+- HTTPS everywhere
+- CSRF protection
+- XSS prevention (React default)
+- SQL injection prevention (Prisma)
+- Rate limiting on all endpoints
+- Input validation with Zod
+- Secure password hashing (bcrypt)
+- JWT with short expiry
+- API key hashing (never store plain)
+
+## Performance Requirements
+
+- Dashboard load < 2 seconds
+- API response < 200ms (P95)
+- Support 10,000+ monitors per installation
+- TimescaleDB compression for efficient storage
+- Redis caching for frequent queries
+- CDN for static assets
+
+## Deployment Architecture
+
+### Production Environment
+- Single Hetzner dedicated server (initially)
+- Docker Compose orchestration
+- Plesk for SSL and domain management
+- Cloudflare for CDN and DDoS protection
+- Cloudflare Workers for distributed checks
+
+### Scaling Path
+- Horizontal scaling via Docker Swarm/K8s
+- Read replicas for PostgreSQL
+- Dedicated TimescaleDB instance
+- Additional worker nodes
+- Geographic distribution
+
+## Success Metrics
+
+- 100 paying customers within 6 months
+- 99.9% platform uptime
+- < 5 second alert latency
+- NPS score > 50
+- < 2% monthly churn
+
+---
+
+*Version: 1.0*
+*Created: December 2024*
+*Target MVP: 6 weeks*

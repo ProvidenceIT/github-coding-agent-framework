@@ -1,0 +1,472 @@
+# BijbelWijs - AI Bijbel Assistent
+
+## Project Overview
+
+BijbelWijs is a Dutch AI-powered Bible study assistant that helps users understand Bible texts, answers theological questions, and finds connections between Scripture passages. Built specifically for the Dutch market with support for multiple translations and theological traditions.
+
+**Target Domain:** bijbelwijs.nl
+
+## Technology Stack (Latest Versions - December 2025)
+
+- **Frontend:** Next.js 16 (v16.0.10) with React 19.2
+- **Language:** TypeScript 5.9.3
+- **Styling:** Tailwind CSS 4.0
+- **UI Components:** shadcn/ui (latest)
+- **Backend:** Node.js 24.x LTS (Krypton) with Fastify 5.6.2
+- **Database:** PostgreSQL 18 with pgvector 0.8.1 extension
+- **Cache:** Redis 8.4
+- **AI:** Claude API (Anthropic) - claude-sonnet-4 / claude-opus-4
+- **Auth:** Auth.js v5 (next-auth@5.x beta)
+- **Email:** SendGrid
+- **Payments:** @mollie/api-client 4.3.3 (iDEAL support)
+- **Hosting:** Docker Compose on Hetzner/Plesk
+- **SSL:** Let's Encrypt via Plesk
+- **CI/CD:** GitHub Actions
+
+### Version Notes
+- Next.js 16 requires React 19.2 and includes Turbopack as default bundler
+- Node.js 24.x LTS (Krypton) supported until April 2028
+- PostgreSQL 18 includes async I/O for 2-3x performance improvements
+- Tailwind CSS 4.0 requires Safari 16.4+, Chrome 111+, Firefox 128+
+- Fastify 5.x requires Node.js 20+
+
+## Core Features (MVP - Phase 1)
+
+### 1. Chat Interface
+- [Chat] Main chat interface for asking Bible questions
+- [Chat] Message input with send button and keyboard shortcuts
+- [Chat] Display AI responses with proper formatting
+- [Chat] Show loading state during AI processing
+- [Chat] Error handling for failed requests
+- [Chat] Mobile-responsive chat layout
+
+### 2. Bible Text Display
+- [Bible] Display Bible verses with proper formatting
+- [Bible] Support multiple translations: SV, HSV, NBV21, BGT
+- [Bible] Side-by-side translation comparison view
+- [Bible] Context display showing surrounding verses
+- [Bible] Book/chapter/verse navigation
+- [Bible] Copy verse to clipboard functionality
+
+### 3. Parallel Texts & Cross-References
+- [CrossRef] Show related Scripture passages
+- [CrossRef] Display cross-reference links in responses
+- [CrossRef] Navigate between related passages
+- [CrossRef] Highlight matching themes/keywords
+
+### 4. Strong's Numbers & Original Languages
+- [Strongs] Hebrew/Greek word lookup
+- [Strongs] Display Strong's number definitions
+- [Strongs] Show transliteration and pronunciation
+- [Strongs] Link words to original language roots
+
+### 5. User Authentication
+- [Auth] Email/password registration
+- [Auth] Email verification flow
+- [Auth] Login/logout functionality
+- [Auth] Password reset via email
+- [Auth] Session management with JWT
+- [Auth] Remember me functionality
+
+### 6. User Preferences
+- [Prefs] Select preferred Bible translation
+- [Prefs] Choose theological tradition filter
+- [Prefs] Dark/light mode toggle
+- [Prefs] Font size preferences
+- [Prefs] Language preference (Dutch)
+
+### 7. Chat History
+- [History] Save chat sessions per user
+- [History] List previous conversations
+- [History] Resume previous chat sessions
+- [History] Delete chat history
+- [History] Search through past conversations
+
+## Secondary Features (Phase 2)
+
+### 8. Bible Commentaries
+- [Commentary] Matthew Henry commentary integration
+- [Commentary] Calvin's commentary integration
+- [Commentary] Korte Verklaring integration
+- [Commentary] Toggle commentary display
+- [Commentary] Filter by theological tradition
+
+### 9. Word Study
+- [WordStudy] Deep analysis of biblical concepts
+- [WordStudy] Show word occurrences across Bible
+- [WordStudy] Semantic range exploration
+- [WordStudy] Related terms and synonyms
+
+### 10. Bookmarks & Notes
+- [Bookmark] Save favorite verses
+- [Bookmark] Add personal notes to verses
+- [Bookmark] Organize bookmarks in folders
+- [Bookmark] Export bookmarks
+- [Bookmark] Share bookmarks via link
+
+### 11. Sharing Features
+- [Share] Share answers via link
+- [Share] WhatsApp sharing integration
+- [Share] Social media share cards
+- [Share] Generate shareable images
+
+### 12. Audio Features
+- [Audio] Text-to-speech for answers
+- [Audio] Dutch voice synthesis
+- [Audio] Playback controls
+- [Audio] Audio speed adjustment
+
+## Advanced Features (Phase 3)
+
+### 13. Preacher Mode
+- [Preacher] Extended exegesis view
+- [Preacher] Sermon preparation tools
+- [Preacher] Historical context analysis
+- [Preacher] Application suggestions
+- [Preacher] Illustration finder
+
+### 14. Group Study
+- [Group] Create study groups
+- [Group] Shared conversation space
+- [Group] Group admin controls
+- [Group] Member invitations
+- [Group] Synchronized Bible reading
+
+### 15. API Access
+- [API] REST API for integrations
+- [API] API key management
+- [API] Rate limiting per tier
+- [API] API documentation
+- [API] Webhook support
+
+### 16. Catechism Integration
+- [Catechism] Heidelberg Catechism lookup
+- [Catechism] Link Q&A to Bible texts
+- [Catechism] Catechism search
+- [Catechism] Sunday devotional mode
+
+### 17. Offline Mode (PWA)
+- [PWA] Progressive Web App setup
+- [PWA] Service worker for caching
+- [PWA] Offline Bible text access
+- [PWA] Sync when online
+- [PWA] Install prompt
+
+## Backend Services
+
+### 18. AI/RAG System
+- [RAG] Vector embeddings for Bible verses
+- [RAG] Semantic search with pgvector
+- [RAG] Context injection for Claude prompts
+- [RAG] Response quality scoring
+- [RAG] Prompt templates management
+
+### 19. Database Schema
+- [DB] Users table with preferences
+- [DB] Chat sessions table
+- [DB] Chat messages table
+- [DB] Bible verses table with embeddings
+- [DB] Strong's numbers table
+- [DB] Bookmarks table
+- [DB] Usage tracking table
+- [DB] Database migrations system
+
+### 20. Caching Layer
+- [Cache] Redis session storage
+- [Cache] API response caching
+- [Cache] Rate limiting counters
+- [Cache] Bible verse caching
+
+### 21. Email Service
+- [Email] SendGrid integration
+- [Email] Welcome email template
+- [Email] Password reset email
+- [Email] Subscription confirmation
+- [Email] Email queue system
+
+### 22. Payment System
+- [Payment] Mollie integration
+- [Payment] iDEAL payment flow
+- [Payment] Subscription management
+- [Payment] Payment webhooks
+- [Payment] Invoice generation
+- [Payment] Subscription tiers: Free, Basis (4.99), Standaard (9.99), Pro (19.99), Kerk (49.99)
+
+### 23. Usage Tracking
+- [Usage] Track questions per user/month
+- [Usage] Token usage monitoring
+- [Usage] Rate limiting enforcement
+- [Usage] Usage analytics dashboard
+
+## Infrastructure
+
+### 24. Docker Setup
+- [Docker] Frontend container (Next.js 16, Node 24-alpine)
+- [Docker] Backend container (Node.js 24-alpine, Fastify 5.6)
+- [Docker] PostgreSQL 18 container with pgvector 0.8.1 (pgvector/pgvector:pg18)
+- [Docker] Redis 8-alpine container
+- [Docker] Backup service container (postgres:18-alpine)
+- [Docker] Docker Compose orchestration (v3.8+)
+- [Docker] Health checks for all services
+- [Docker] Multi-stage builds for smaller images
+
+### 25. Deployment
+- [Deploy] GitHub Actions CI/CD
+- [Deploy] Automated testing in pipeline
+- [Deploy] SSH deployment to Plesk
+- [Deploy] Zero-downtime deployments
+- [Deploy] Rollback capability
+
+### 26. Plesk Configuration
+- [Plesk] Nginx reverse proxy setup
+- [Plesk] SSL certificate via Let's Encrypt
+- [Plesk] Domain configuration
+- [Plesk] WebSocket proxy support
+
+### 27. Backup System
+- [Backup] Daily PostgreSQL backups
+- [Backup] 7-day backup retention
+- [Backup] Automated backup script
+- [Backup] Backup monitoring
+
+### 28. Monitoring
+- [Monitor] Health check endpoints
+- [Monitor] Error logging
+- [Monitor] Performance metrics
+- [Monitor] Uptime monitoring
+- [Monitor] Alert notifications
+
+## Security
+
+### 29. Authentication Security
+- [Security] Password hashing (bcrypt)
+- [Security] JWT token security
+- [Security] CSRF protection
+- [Security] XSS prevention
+- [Security] SQL injection prevention
+
+### 30. API Security
+- [Security] Rate limiting
+- [Security] Input validation
+- [Security] CORS configuration
+- [Security] API key encryption
+- [Security] Request logging
+
+### 31. Data Protection
+- [Security] GDPR compliance
+- [Security] Data encryption at rest
+- [Security] Secure environment variables
+- [Security] Audit logging
+
+## UI/UX Requirements
+
+### 32. Design System
+- [UI] Consistent color palette (religious/professional)
+- [UI] Typography system (readable for long texts)
+- [UI] Icon library selection
+- [UI] Component library (shadcn/ui recommended)
+- [UI] Responsive breakpoints
+
+### 33. Accessibility
+- [A11y] WCAG 2.1 AA compliance
+- [A11y] Screen reader support
+- [A11y] Keyboard navigation
+- [A11y] High contrast mode
+- [A11y] Focus indicators
+
+### 34. Landing Page
+- [Landing] Hero section with value proposition
+- [Landing] Feature highlights
+- [Landing] Pricing table
+- [Landing] Testimonials section
+- [Landing] FAQ section
+- [Landing] Call-to-action buttons
+- [Landing] Newsletter signup
+
+### 35. Dashboard
+- [Dashboard] User statistics
+- [Dashboard] Recent conversations
+- [Dashboard] Quick actions
+- [Dashboard] Subscription status
+- [Dashboard] Usage meter
+
+## Data Import
+
+### 36. Bible Data
+- [Import] Statenvertaling (SV) - public domain
+- [Import] Herziene Statenvertaling (HSV) - requires license
+- [Import] NBV21 - requires NBG license
+- [Import] Bijbel in Gewone Taal (BGT) - requires license
+- [Import] Verse parsing and normalization
+- [Import] Book/chapter/verse indexing
+
+### 37. Strong's Data
+- [Import] Hebrew Strong's numbers
+- [Import] Greek Strong's numbers
+- [Import] Definitions and usage notes
+- [Import] Cross-language mappings
+
+### 38. Commentary Data
+- [Import] Matthew Henry (public domain)
+- [Import] Calvin's commentaries
+- [Import] Dutch theological resources
+
+## Testing Requirements
+
+### 39. Backend Testing
+- [Test] Unit tests for services
+- [Test] Integration tests for API
+- [Test] Database migration tests
+- [Test] Authentication flow tests
+
+### 40. Frontend Testing
+- [Test] Component unit tests
+- [Test] E2E tests with Playwright
+- [Test] Accessibility tests
+- [Test] Mobile responsive tests
+
+### 41. AI Testing
+- [Test] Prompt quality validation
+- [Test] Response accuracy checks
+- [Test] Hallucination detection
+- [Test] Performance benchmarks
+
+## Documentation
+
+### 42. Technical Docs
+- [Docs] API documentation
+- [Docs] Database schema docs
+- [Docs] Deployment guide
+- [Docs] Environment setup guide
+
+### 43. User Docs
+- [Docs] User manual
+- [Docs] FAQ page
+- [Docs] Video tutorials
+- [Docs] Help center
+
+## Legal & Compliance
+
+### 44. Legal Pages
+- [Legal] Privacy policy (Dutch)
+- [Legal] Terms of service
+- [Legal] Cookie policy
+- [Legal] Disclaimer (theological)
+
+### 45. License Management
+- [License] Bible translation licenses
+- [License] Commentary licenses
+- [License] Open source attributions
+
+## Analytics
+
+### 46. User Analytics
+- [Analytics] Page view tracking
+- [Analytics] Feature usage tracking
+- [Analytics] Conversion tracking
+- [Analytics] User journey analysis
+
+### 47. Business Metrics
+- [Analytics] MRR tracking
+- [Analytics] Churn rate
+- [Analytics] Customer acquisition cost
+- [Analytics] Lifetime value
+
+## Future Considerations
+
+### 48. Scalability
+- [Scale] Horizontal scaling strategy
+- [Scale] Database read replicas
+- [Scale] CDN for static assets
+- [Scale] Load balancing
+
+### 49. Internationalization
+- [i18n] Multi-language support structure
+- [i18n] Belgian Dutch variant
+- [i18n] Potential English expansion
+
+### 50. Mobile App
+- [Mobile] React Native consideration
+- [Mobile] Push notifications
+- [Mobile] App store deployment
+
+## Project Structure
+
+```
+bijbelwijs/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── backend/
+│   ├── src/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── models/
+│   │   └── utils/
+│   ├── Dockerfile
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   └── lib/
+│   ├── Dockerfile
+│   └── package.json
+├── database/
+│   └── init.sql
+├── scripts/
+│   └── backup.sh
+├── backups/
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+## Environment Variables
+
+```
+# Database
+POSTGRES_DB=bijbelwijs
+POSTGRES_USER=bijbelwijs
+POSTGRES_PASSWORD=
+
+# Auth
+JWT_SECRET=
+JWT_REFRESH_SECRET=
+NEXTAUTH_SECRET=
+
+# Claude API
+ANTHROPIC_API_KEY=
+
+# SendGrid
+SENDGRID_API_KEY=
+SENDGRID_FROM_EMAIL=noreply@bijbelwijs.nl
+
+# Mollie
+MOLLIE_API_KEY=
+MOLLIE_WEBHOOK_URL=https://bijbelwijs.nl/api/webhooks/mollie
+
+# URLs
+FRONTEND_URL=https://bijbelwijs.nl
+NEXT_PUBLIC_API_URL=https://bijbelwijs.nl/api
+CORS_ORIGINS=https://bijbelwijs.nl
+```
+
+## Pricing Tiers
+
+| Tier | Price | Features |
+|------|-------|----------|
+| Gratis | €0/month | 20 questions/month, 1 translation, no history |
+| Basis | €4.99/month | 200 questions/month, all translations, history |
+| Standaard | €9.99/month | Unlimited, commentaries, Strong's |
+| Pro | €19.99/month | + API access, group study, priority |
+| Kerk | €49.99/month | 10 users, branding, support |
+
+## Success Metrics
+
+- 1,000 registered users within 3 months
+- 100 paying subscribers within 6 months
+- €1,000 MRR within 6 months
+- 4.5+ star rating in user feedback
+- <2s average response time
+- 99.9% uptime

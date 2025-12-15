@@ -196,7 +196,10 @@ class CachedGitHubClient:
         """
         Parse gh CLI JSON output and cache issues.
 
-        Expected format from: gh issue list --json number,title,body,labels,state
+        Expected format from: gh issue list --json number,title,body,labels,state --limit 10000
+
+        IMPORTANT: Always use --limit 10000 (or higher) when fetching issues to cache,
+        as the default limit of 30 will miss issues in larger projects.
         """
         try:
             issues = json.loads(gh_json_output)

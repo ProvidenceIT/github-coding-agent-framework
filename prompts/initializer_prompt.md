@@ -6,6 +6,9 @@ Your job is to set up the foundation for all future coding agents.
 You use GitHub Issues for project management via the `gh` CLI.
 GitHub is your single source of truth for what needs to be built.
 
+**CRITICAL: Use `--repo` flag with ALL `gh` commands!**
+See the PROJECT CONTEXT section above for the exact repo name to use.
+
 **⚡ EFFICIENCY:** You have limited turns. Move fast through setup steps.
 
 ---
@@ -76,15 +79,15 @@ echo "✅ .gitignore created - node_modules will NOT be committed"
 ### 3️⃣ THIRD: Create Labels (batch all at once)
 
 ```bash
-# Create all labels in one batch
-gh label create "priority:urgent" --color "B60205" --description "Urgent" 2>&1 || true
-gh label create "priority:high" --color "D93F0B" --description "High priority" 2>&1 || true
-gh label create "priority:medium" --color "FBCA04" --description "Medium priority" 2>&1 || true
-gh label create "priority:low" --color "0E8A16" --description "Low priority" 2>&1 || true
-gh label create "functional" --color "1D76DB" --description "Functional feature" 2>&1 || true
-gh label create "style" --color "5319E7" --description "Styling/UI" 2>&1 || true
-gh label create "infrastructure" --color "006B75" --description "Infrastructure" 2>&1 || true
-gh label create "meta" --color "FFFFFF" --description "Project tracking" 2>&1 || true
+# Create all labels in one batch (use --repo from PROJECT CONTEXT)
+gh label create "priority:urgent" --repo REPO --color "B60205" --description "Urgent" 2>&1 || true
+gh label create "priority:high" --repo REPO --color "D93F0B" --description "High priority" 2>&1 || true
+gh label create "priority:medium" --repo REPO --color "FBCA04" --description "Medium priority" 2>&1 || true
+gh label create "priority:low" --repo REPO --color "0E8A16" --description "Low priority" 2>&1 || true
+gh label create "functional" --repo REPO --color "1D76DB" --description "Functional feature" 2>&1 || true
+gh label create "style" --repo REPO --color "5319E7" --description "Styling/UI" 2>&1 || true
+gh label create "infrastructure" --repo REPO --color "006B75" --description "Infrastructure" 2>&1 || true
+gh label create "meta" --repo REPO --color "FFFFFF" --description "Project tracking" 2>&1 || true
 echo "✅ Labels created"
 ```
 
@@ -95,14 +98,14 @@ echo "✅ Labels created"
 **The title MUST contain "[META]"** so other agents can find it!
 
 ```bash
-# First check if META issue already exists
-EXISTING_META=$(gh issue list --search "[META]" --json number -q '.[0].number' 2>/dev/null)
+# First check if META issue already exists (use --repo from PROJECT CONTEXT)
+EXISTING_META=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number' 2>/dev/null)
 
 if [ -n "$EXISTING_META" ]; then
   echo "✅ META issue #$EXISTING_META already exists"
 else
   # Create new META issue with searchable title
-  gh issue create \
+  gh issue create --repo REPO \
     --title "[META] Project Progress Tracker" \
     --body "$(cat <<'EOF'
 # 📊 Project Progress Tracker
@@ -150,7 +153,7 @@ EOF
 fi
 
 # Store META issue number for later
-META_ISSUE=$(gh issue list --search "[META]" --json number -q '.[0].number')
+META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
 echo "META issue number: $META_ISSUE"
 ```
 
@@ -162,9 +165,9 @@ Now create issues for all features in app_spec.txt.
 
 **Target: 25-50 issues** covering all functionality. Quality over quantity.
 
-**Issue Template:**
+**Issue Template (use --repo from PROJECT CONTEXT):**
 ```bash
-gh issue create \
+gh issue create --repo REPO \
   --title "[Category] Feature Name" \
   --body "$(cat <<'EOF'
 ## Description
@@ -232,13 +235,13 @@ echo "✅ init.sh created"
 
 ### 8️⃣ EIGHTH: Update META Issue with Final Count
 
-**Before ending, update the META issue with actual counts:**
+**Before ending, update the META issue with actual counts (use --repo from PROJECT CONTEXT):**
 
 ```bash
-META_ISSUE=$(gh issue list --search "[META]" --json number -q '.[0].number')
-TOTAL_ISSUES=$(gh issue list --json number | jq 'length')
+META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
+TOTAL_ISSUES=$(gh issue list --repo REPO --json number --limit 10000 | jq 'length')
 
-gh issue comment $META_ISSUE --body "$(cat <<EOF
+gh issue comment $META_ISSUE --repo REPO --body "$(cat <<EOF
 ## Session 1 Complete - Initialization
 
 ### Accomplished
@@ -257,7 +260,7 @@ gh issue comment $META_ISSUE --body "$(cat <<EOF
 - Run \`./init.sh\` to start dev server
 - Begin with priority:urgent issues
 - Focus on core infrastructure first (auth, database, routes)
-- Close issues when verified complete: \`gh issue close <number>\`
+- Close issues when verified complete: \`gh issue close <number> --repo REPO\`
 EOF
 )"
 
