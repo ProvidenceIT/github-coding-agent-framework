@@ -16,10 +16,14 @@ Features:
 - Comprehensive logging
 - Retry mechanism for unhealthy sessions
 - Constitution support for project governance
+- Multi-provider support (002-multi-sdk)
 
 Usage:
     python parallel_agent.py --project-dir ./generations/my_project --concurrent 3
     python parallel_agent.py --project-dir ./generations/my_project --concurrent 2 --iterations 5
+
+    # Use specific provider
+    python parallel_agent.py --project-dir ./generations/my_project --provider gemini
 """
 
 import asyncio
@@ -56,6 +60,17 @@ from api_error_handler import (
 )
 from github_cache import GitHubAPIError, execute_gh_command
 from github_projects import GitHubProjectsManager, create_projects_manager
+
+# Multi-provider support (002-multi-sdk)
+try:
+    from providers import (
+        ProviderPool,
+        create_default_pool,
+        NoProvidersAvailableError,
+    )
+    MULTI_PROVIDER_AVAILABLE = True
+except ImportError:
+    MULTI_PROVIDER_AVAILABLE = False
 
 
 # =============================================================================
@@ -905,11 +920,13 @@ class ParallelAgentManager:
         self,
         project_dir: Path,
         max_concurrent: int = 3,
-        model: str = "claude-sonnet-4-20250514"
+        model: str = "claude-sonnet-4-20250514",
+        provider_name: str = None
     ):
         self.project_dir = project_dir.resolve()
         self.max_concurrent = max_concurrent
         self.model = model
+        self.provider_name = provider_name  # 002-multi-sdk: optional provider selection
 
         # Get repo info
         repo_info = get_repo_info(project_dir)
@@ -946,6 +963,22 @@ class ParallelAgentManager:
             self.projects_manager.get_or_create_project()
         except Exception as e:
             self._log("init", f"Projects manager init warning: {e}", "warning")
+
+        # 002-multi-sdk: Initialize provider pool for multi-provider support
+        self.provider_pool = None
+        self.selected_provider_name = "claude"  # Default
+        if MULTI_PROVIDER_AVAILABLE:
+            try:
+                self.provider_pool = create_default_pool(project_dir)
+                self._log("init", f"Provider pool initialized with {self.provider_pool.provider_count} provider(s)")
+
+                # Get provider (either specified or highest priority)
+                provider = self.provider_pool.get_provider(provider_name)
+                self.selected_provider_name = provider.name
+                self._log("init", f"Selected provider: {self.selected_provider_name}")
+            except Exception as e:
+                self._log("init", f"Provider pool init warning: {e}", "warning")
+                self.provider_pool = None
 
         # Shared client options
         self.client_options = ClaudeCodeOptions(
@@ -1003,6 +1036,9 @@ class ParallelAgentManager:
         print(f"  Concurrent Sessions: {self.max_concurrent}")
         print(f"  Iterations: {num_iterations}")
         print(f"  Model: {self.model}")
+        print(f"  Provider: {self.selected_provider_name}")
+        if self.provider_pool:
+            print(f"  Available Providers: {self.provider_pool.provider_count}")
         print(f"{'='*70}\n")
 
         total_completed = 0
@@ -1614,6 +1650,13 @@ Note: The project must be initialized first with autonomous_agent_fixed.py to cr
         help="Project spec name from prompts/{name}/app_spec.txt"
     )
 
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="AI provider to use (claude, gemini, copilot, codex). Defaults to priority-based selection."
+    )
+
     args = parser.parse_args()
 
     # Validate/create project directory
@@ -1653,7 +1696,8 @@ Note: The project must be initialized first with autonomous_agent_fixed.py to cr
         manager = ParallelAgentManager(
             project_dir=args.project_dir,
             max_concurrent=args.concurrent,
-            model=args.model
+            model=args.model,
+            provider_name=args.provider
         )
 
         await manager.run_parallel(num_iterations=args.iterations)

@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "providers": [
+    {
+      "name": "claude",
+      "enabled": true,
+      "priority": 1,
+      "config": {
+        "model": "claude-opus-4-5-20251101",
+        "max_turns": 50,
+        "auth_env_var": "CLAUDE_CODE_OAUTH_TOKEN",
+        "extra": {
+          "allowed_tools": ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
+        }
+      }
+    },
+    {
+      "name": "gemini",
+      "enabled": true,
+      "priority": 2,
+      "config": {
+        "model": "gemini-2.5-flash",
+        "auth_env_var": "GEMINI_API_KEY",
+        "extra": {
+          "output_format": "json",
+          "include_directories": ["./src", "./lib"]
+        }
+      }
+    },
+    {
+      "name": "copilot",
+      "enabled": false,
+      "priority": 3,
+      "config": {
+        "extra": {
+          "working_directory_scope": "project"
+        }
+      }
+    },
+    {
+      "name": "codex",
+      "enabled": false,
+      "priority": 4,
+      "config": {
+        "auth_env_var": "OPENAI_API_KEY",
+        "extra": {
+          "reasoning_level": "high"
+        }
+      }
+    }
+  ],
+  "failover": {
+    "enabled": true,
+    "timeout_seconds": 10,
+    "max_retries": 3,
+    "cooldown_seconds": 60
+  }
+}

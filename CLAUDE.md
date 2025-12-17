@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -375,3 +375,90 @@ The coding prompt includes TDD verification steps when constitution enables TDD 
 - Check lint passes
 - Verify build succeeds
 - Browser verification (if required)
+
+## Multi-SDK Provider Support (Feature 002)
+
+The framework supports multiple AI agent backends via a pluggable provider system.
+
+### Supported Providers
+
+| Provider | Installation | Authentication |
+|----------|--------------|----------------|
+| Claude | `pip install claude-code-sdk` | `CLAUDE_CODE_OAUTH_TOKEN` env var |
+| Gemini | `npm install -g @google/gemini-cli` | `GEMINI_API_KEY` env var |
+| Copilot | Included with Copilot subscription | `gh auth login` |
+| Codex | `npm install -g @openai/codex` | ChatGPT sign-in or `OPENAI_API_KEY` |
+
+### Provider Configuration
+
+Create `provider_config.json` in your project directory:
+
+```json
+{
+  "providers": [
+    {
+      "name": "claude",
+      "enabled": true,
+      "priority": 1,
+      "config": {
+        "model": "claude-opus-4-5-20251101",
+        "max_turns": 50
+      }
+    },
+    {
+      "name": "gemini",
+      "enabled": true,
+      "priority": 2,
+      "config": {
+        "model": "gemini-2.5-flash"
+      }
+    }
+  ],
+  "failover": {
+    "enabled": true,
+    "timeout_seconds": 10,
+    "max_retries": 3,
+    "cooldown_seconds": 60
+  }
+}
+```
+
+### Using Specific Providers
+
+```bash
+# Use priority-based selection (highest priority healthy provider)
+python autonomous_agent_fixed.py --project-dir ./my_project
+
+# Use specific provider
+python autonomous_agent_fixed.py --project-dir ./my_project --provider gemini
+
+# Parallel with provider selection
+python parallel_agent.py --project-dir ./my_project --provider gemini
+```
+
+### Provider Architecture
+
+```
+providers/
+  __init__.py           # Package exports
+  base.py               # BaseProvider abstract class, HealthStatus enum
+  config.py             # Configuration loading and validation
+  pool.py               # ProviderPool for selection and failover
+  claude_provider.py    # Claude Code SDK adapter
+  gemini_provider.py    # Gemini CLI adapter
+  copilot_provider.py   # GitHub Copilot CLI adapter
+  codex_provider.py     # OpenAI Codex CLI adapter
+```
+
+### Failover Behavior
+
+When failover is enabled:
+1. Primary provider failure triggers retry (up to `max_retries`)
+2. After retries exhausted, switches to next priority provider
+3. Failed providers enter cooldown period (`cooldown_seconds`)
+4. Rate limit errors immediately trigger failover
+5. All providers exhausted raises `NoProvidersAvailableError`
+
+### Backward Compatibility
+
+If no `provider_config.json` exists, the framework defaults to Claude-only mode using `CLAUDE_CODE_OAUTH_TOKEN`. Existing projects work unchanged.

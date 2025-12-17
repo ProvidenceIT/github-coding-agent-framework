@@ -251,14 +251,58 @@ class StructuredLogger:
             exc_info=True
         )
 
-    def log_session_start(self):
+    def log_session_start(self, provider_name: str = None):
         """Log session start."""
+        extra = {
+            'category': 'session',
+            'action': 'start',
+            'agent_type': self.agent_type
+        }
+        if provider_name:
+            extra['provider'] = provider_name
+
         self.logger.info(
-            f"Session started: {self.session_id}",
+            f"Session started: {self.session_id}" + (f" (provider: {provider_name})" if provider_name else ""),
+            extra=extra
+        )
+
+    def log_provider_selected(self, provider_name: str, reason: str = "priority"):
+        """Log provider selection event (002-multi-sdk)."""
+        self.logger.info(
+            f"Provider selected: {provider_name}",
             extra={
-                'category': 'session',
-                'action': 'start',
-                'agent_type': self.agent_type
+                'category': 'provider',
+                'action': 'selected',
+                'provider': provider_name,
+                'reason': reason
+            }
+        )
+
+    def log_provider_switch(self, from_provider: str, to_provider: str, reason: str):
+        """Log provider switch event for failover (002-multi-sdk)."""
+        self.logger.warning(
+            f"Provider switch: {from_provider} -> {to_provider}",
+            extra={
+                'category': 'provider',
+                'action': 'switch',
+                'from_provider': from_provider,
+                'to_provider': to_provider,
+                'reason': reason
+            }
+        )
+
+    def log_provider_health(self, provider_name: str, health_status: str, error: str = None):
+        """Log provider health status change (002-multi-sdk)."""
+        level = logging.INFO if health_status in ('healthy', 'unknown') else logging.WARNING
+        self.logger.log(
+            level,
+            f"Provider {provider_name} health: {health_status}",
+            extra={
+                'category': 'provider',
+                'action': 'health_change',
+                'provider': provider_name,
+                'health_status': health_status,
+                'error': error
             }
         )
 
@@ -368,7 +412,9 @@ class StructuredFormatter(logging.Formatter):
                        'error_message', 'issues_completed', 'issues_attempted',
                        'metrics', 'metadata',
                        # T058: Productivity fields
-                       'tool_count', 'issues_closed', 'productivity_score', 'warnings']
+                       'tool_count', 'issues_closed', 'productivity_score', 'warnings',
+                       # 002-multi-sdk: Provider fields
+                       'provider', 'from_provider', 'to_provider', 'reason', 'health_status']
 
         for field in extra_fields:
             if hasattr(record, field):
@@ -401,6 +447,7 @@ class ConsoleFormatter(logging.Formatter):
         'error': '❌',
         'session': '🚀',
         'productivity': '📊',  # T058
+        'provider': '🔌',  # 002-multi-sdk
         'default': 'ℹ️'
     }
 

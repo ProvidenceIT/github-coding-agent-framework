@@ -5,10 +5,14 @@ Autonomous GitHub Coding Agent - Fixed Version
 Key fixes:
 1. Create client ONCE at start, reuse for all sessions
 2. Use single-line system_prompt (multiline prompts cause initialization timeout)
+3. Multi-provider support via ProviderPool (002-multi-sdk)
 
 Usage:
     set CLAUDE_CODE_OAUTH_TOKEN=your-token-here
     python autonomous_agent_fixed.py --project-dir ./my_project [--max-iterations 5]
+
+    # Use specific provider
+    python autonomous_agent_fixed.py --project-dir ./my_project --provider gemini
 """
 
 import asyncio
@@ -30,6 +34,18 @@ if sys.platform == 'win32' and sys.stdout.encoding != 'utf-8':
 
 from claude_code_sdk import ClaudeSDKClient, ClaudeCodeOptions
 from github_cache import GitHubCache
+
+# Multi-provider support (002-multi-sdk)
+try:
+    from providers import (
+        ProviderPool,
+        create_default_pool,
+        NoProvidersAvailableError,
+        ProviderValidationError,
+    )
+    MULTI_PROVIDER_AVAILABLE = True
+except ImportError:
+    MULTI_PROVIDER_AVAILABLE = False
 from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
 from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project, set_project_context
@@ -1079,8 +1095,16 @@ coverage/
         raise Exception(f"Failed to initialize git repository: {error_msg}")
 
 
-async def main(project_dir: Path, model: str, max_iterations: int = None, project_name: str = None):
-    """Main autonomous agent loop."""
+async def main(project_dir: Path, model: str, max_iterations: int = None, project_name: str = None, provider_name: str = None):
+    """Main autonomous agent loop.
+
+    Args:
+        project_dir: Project directory path
+        model: Model to use (for Claude provider)
+        max_iterations: Maximum iterations to run (None for unlimited)
+        project_name: Project spec name
+        provider_name: Specific provider to use (None for priority-based selection)
+    """
     run_start_time = time.time()
 
     # Ensure absolute path
@@ -1094,6 +1118,39 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
     logger.info(f"Project name: {project_name if project_name else project_dir.name}")
     logger.info(f"Model: {model}")
     logger.info(f"Max iterations: {max_iterations if max_iterations else 'unlimited'}")
+    logger.info(f"Provider: {provider_name if provider_name else 'auto (priority-based)'}")
+
+    # Initialize provider pool (002-multi-sdk)
+    provider_pool = None
+    selected_provider_name = "claude"  # Default for backward compatibility
+
+    if MULTI_PROVIDER_AVAILABLE:
+        try:
+            provider_pool = create_default_pool(project_dir)
+            logger.info(f"Provider pool initialized with {provider_pool.provider_count} provider(s)")
+
+            # Validate providers
+            validation_results = await provider_pool.validate_providers()
+            for name, valid in validation_results.items():
+                status = "OK" if valid else "FAILED"
+                logger.info(f"  Provider {name}: {status}")
+                if not valid and name in provider_pool.validation_errors:
+                    logger.warning(f"    Error: {provider_pool.validation_errors[name]}")
+
+            # Get selected provider
+            try:
+                provider = provider_pool.get_provider(provider_name)
+                selected_provider_name = provider.name
+                logger.info(f"Selected provider: {selected_provider_name}")
+            except NoProvidersAvailableError as e:
+                logger.warning(f"No providers available: {e}. Falling back to Claude SDK directly.")
+                provider_pool = None
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize provider pool: {e}. Using Claude SDK directly.")
+            provider_pool = None
+    else:
+        logger.info("Multi-provider support not available. Using Claude SDK directly.")
 
     # Copy app_spec.txt to project directory
     logger.debug("Copying app_spec.txt to project directory")
@@ -1134,6 +1191,7 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
     print(f"  Project: {project_dir.name}")
     print(f"  Location: {project_dir}")
     print(f"  Model: {model}")
+    print(f"  Provider: {selected_provider_name}")
     print(f"  Mode: {'Initializer (first run)' if is_first_run else 'Coding agent'}")
     print("="*70 + "\n")
 
@@ -1433,6 +1491,8 @@ Examples:
     parser.add_argument("--project-name", type=str, default=None, help="Project spec name (looks in prompts/{project_name}/app_spec.txt)")
     parser.add_argument("--max-iterations", type=int, default=None, help="Max iterations (default: unlimited)")
     parser.add_argument("--model", type=str, default="claude-opus-4-5-20251101", help="Claude model")
+    parser.add_argument("--provider", type=str, default=None,
+                       help="AI provider to use (claude, gemini, copilot, codex). Defaults to priority-based selection from provider_config.json")
 
     args = parser.parse_args()
 
@@ -1471,4 +1531,4 @@ Examples:
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # Run agent
-    asyncio.run(main(project_dir, args.model, args.max_iterations, args.project_name))
+    asyncio.run(main(project_dir, args.model, args.max_iterations, args.project_name, args.provider))
