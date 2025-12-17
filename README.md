@@ -1,19 +1,16 @@
-# Autonomous Coding Agent Framework (GitHub-Integrated)
+# Autonomous Coding Agent Framework
 
 A production-ready autonomous coding agent framework using Claude Code SDK and GitHub Issues/Projects v2 for project management.
 
-## ✅ Status: Working
-
-The agent is fully functional after fixing the multiline system_prompt timeout issue. See [SOLUTION_MULTILINE_PROMPT_FIX.md](SOLUTION_MULTILINE_PROMPT_FIX.md) for details.
-
 ## Key Features
 
-- **GitHub Integration**: Work tracked as GitHub Issues with Projects v2
-- **Real-time Visibility**: Watch agent progress in your GitHub repository
-- **Two-Agent Pattern**: Initializer creates GitHub project & issues, coding agents implement them
-- **Autonomous Loop**: Agent automatically switches between initializer and coding modes
-- **Auto-Commit & Push**: Automatic git operations after each session
-- **Intelligent Caching**: Reduces API calls by 60-80%
+- **GitHub Integration**: Work tracked as GitHub Issues with Projects v2 Kanban boards
+- **Parallel Execution**: Run multiple agent sessions concurrently for faster development
+- **Agent Reliability**: TTL-based claim expiration, graceful termination, outcome validation
+- **API Error Handling**: Automatic token rotation and retry strategies for rate limits
+- **Constitution System**: Project governance rules for deployment, secrets, and coding standards
+- **Session Health Monitoring**: Productivity scoring, stall detection, error tracking
+- **Intelligent Caching**: Reduces GitHub API calls by 60-80%
 - **Production Logging**: Structured JSON logging with rotation
 
 ## Quick Start
@@ -38,76 +35,36 @@ claude setup-token
 
 ### 2. Run the Agent
 
+**Sequential mode (single agent):**
 ```bash
-# Basic usage
-python autonomous_agent_fixed.py --project-dir ./my_project
+# Basic usage - runs indefinitely
+python autonomous_agent_fixed.py --project-dir ./generations/my_project
 
-# Limited iterations for testing
-python autonomous_agent_fixed.py --project-dir ./my_project --max-iterations 5
+# Run for specific iterations
+python autonomous_agent_fixed.py --project-dir ./generations/my_project --max-iterations 5
 
-# Use a different model
-python autonomous_agent_fixed.py --project-dir ./my_project --model claude-opus-4-5-20251101
-
-# Use a specific project spec from your library
-python autonomous_agent_fixed.py --project-dir ./my_project --project-name my-saas-app
+# Use specific project spec
+python autonomous_agent_fixed.py --project-dir ./generations/my_project --project-name my_spec
 ```
 
-## Managing Project Specifications
-
-The framework now supports organized project specifications stored in `prompts/{project_name}/` directories. This allows you to maintain a library of reusable project specs.
-
-See [PROJECT_SPECS_README.md](PROJECT_SPECS_README.md) for full documentation.
-
-### Quick Reference
-
+**Parallel mode (recommended for faster development):**
 ```bash
-# List all available project specs
-python manage_specs.py list
+# Run 3 concurrent sessions (default)
+python parallel_agent.py --project-dir ./generations/my_project
 
-# Create a new project spec
-python manage_specs.py create my-new-project
-
-# View a project spec
-python manage_specs.py view test_fresh
-
-# Edit a project spec
-python manage_specs.py edit my-new-project
+# Run 2 concurrent sessions for 5 iteration rounds
+python parallel_agent.py --project-dir ./generations/my_project --concurrent 2 --iterations 5
 ```
 
-### Running with a Specific Spec
+### 3. Monitor Progress
 
 ```bash
-# Use the test_fresh spec
-python autonomous_agent_fixed.py \
-  --project-dir ./generations/my-project \
-  --project-name test_fresh
+# Real-time dashboard
+python monitor.py ./generations/my_project --watch
 
-# The agent will:
-# 1. Copy prompts/test_fresh/app_spec.txt to project directory
-# 2. Create GitHub repo: ProvidenceIT/clevertech-providenceit-automation
-# 3. Create 50 issues from the spec
-# 4. Start building
+# View session logs
+python view_logs.py ./generations/my_project/logs/session_*.jsonl
 ```
-
-The spec lookup order is:
-1. `prompts/{--project-name}/app_spec.txt` (if specified)
-2. `prompts/{directory-name}/app_spec.txt` (auto-detect)
-3. `prompts/app_spec.txt` (legacy fallback)
-
-## Agent Features
-
-**`autonomous_agent_fixed.py`** - Production-ready autonomous coding agent
-
-**Status:** ✅ Working perfectly
-
-**Features:**
-- Creates client once and reuses it (efficient)
-- Single-line system_prompt (no timeout issues)
-- Full GitHub integration (Issues + Projects v2)
-- Automatic prompt switching (initializer → coding)
-- GitHub API caching (reduces calls by 60-80%)
-- Auto-commit and push after each session
-- Clean, maintainable codebase
 
 ## How It Works
 
@@ -116,135 +73,149 @@ The spec lookup order is:
 ```
 Session 1 (Initializer):
   ├── Read app_spec.txt
-  ├── Create GitHub Project (v2 board)
-  ├── Create labeled GitHub issues
+  ├── Create GitHub Project (v2 Kanban board)
+  ├── Create labeled GitHub issues (25-50)
   ├── Set up project structure
   └── Mark initialization complete
 
-Session 2+ (Coding Agent):
-  ├── Query GitHub for open issues
-  ├── Pick highest priority Todo issue
+Session 2+ (Coding Agents):
+  ├── Claim issue with TTL lock
   ├── Move issue to In Progress
   ├── Implement the feature
-  ├── Test implementation
-  ├── Update issue with comment
-  ├── Close issue (mark Done)
-  └── Repeat for next issue
+  ├── Verify implementation
+  ├── Close issue and move to Done
+  ├── Update META issue with progress
+  └── Commit and push changes
 ```
 
-### Session Handoff via GitHub
+### Agent Reliability Features
 
-Agents communicate through:
-- **Issue Comments**: Implementation details, blockers, context
-- **Project Status**: Todo / In Progress / Done columns
-- **Git Commits**: Code changes with session metadata
+- **TTL-Based Claims**: Issues are locked for 30 minutes; stale claims auto-expire
+- **Graceful Termination**: Stops after 3 rounds with no available issues
+- **Failure Tracking**: Issues deprioritized after 3 failures
+- **Outcome Validation**: Sessions must close issues, update META, and push to git
+- **Productivity Scoring**: Formula: `(files_changed * 2 + issues_closed * 5) / tool_count`
+
+### API Error Handling
+
+Automatic classification and recovery:
+- **Rate Limits (429)**: Wait and retry with exponential backoff
+- **Authentication (401/403)**: Rotate to next available token
+- **Conflicts (409)**: Pull and retry with rebase
+- **Overloaded (529)**: Extended wait before retry
 
 ## Project Structure
 
 ```
 github-coding-agent-framework/
-├── autonomous_agent_fixed.py      # ✅ Main agent
-├── github_cache.py                # GitHub API response caching
-├── github_enhanced.py             # Enhanced GitHub integration
-├── github_config.py               # GitHub configuration
-├── git_utils.py                   # Git operations
-├── prompts.py                     # Prompt loading utilities
-├── logging_system.py              # Structured logging
-├── monitor.py                     # Progress monitoring
-├── progress.py                    # Progress tracking
-├── security.py                    # Security configuration
+├── autonomous_agent_fixed.py   # Sequential agent (single session)
+├── parallel_agent.py           # Parallel agent (multiple sessions)
+├── api_error_handler.py        # Error classification and recovery
+├── github_cache.py             # API caching with TTL
+├── github_projects.py          # Projects v2 Kanban integration
+├── github_enhanced.py          # Enhanced GitHub operations
+├── github_config.py            # Configuration constants
+├── git_utils.py                # Git operations with large file handling
+├── issue_claim_manager.py      # Cross-session issue locking
+├── session_state.py            # Session checkpointing
+├── token_rotator.py            # Multi-token rotation
+├── constitution.py             # Project governance rules
+├── logging_system.py           # Structured JSON logging
+├── prompts.py                  # Prompt loading utilities
+├── monitor.py                  # Progress dashboard
+├── manage_specs.py             # Project spec management
+├── view_logs.py                # Log viewer
 ├── prompts/
-│   ├── app_spec.txt               # Application specification
-│   ├── initializer_prompt.md      # Session 1 prompt
-│   └── coding_prompt.md           # Session 2+ prompt
-└── requirements.txt               # Python dependencies
+│   ├── initializer_prompt.md   # Session 1 prompt
+│   ├── coding_prompt.md        # Session 2+ prompt
+│   └── {project_name}/         # Project-specific specs
+│       └── app_spec.txt
+├── tests/                      # Test suite
+└── docs/                       # Documentation
 ```
 
 ## Command Line Options
+
+### autonomous_agent_fixed.py
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--project-dir` | Directory for the project | Required |
 | `--max-iterations` | Max agent iterations | Unlimited |
-| `--model` | Claude model to use | `claude-sonnet-4-5-20250929` |
+| `--model` | Claude model to use | claude-opus-4-5-20251101 |
+| `--project-name` | Spec from prompts/{name}/ | Auto-detect |
+
+### parallel_agent.py
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--project-dir` | Directory for the project | Required |
+| `--concurrent` | Number of parallel sessions | 3 |
+| `--iterations` | Max iteration rounds | Unlimited |
+| `--model` | Claude model to use | claude-opus-4-5-20251101 |
 
 ## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | From `claude setup-token` | Yes |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Primary Claude Code token | Yes |
+| `CLAUDE_CODE_OAUTH_TOKEN_2` | Backup token for rotation | No |
+| `CLAUDE_CODE_OAUTH_TOKEN_3` | Additional backup token | No |
 
 GitHub authentication is handled by `gh auth login`.
 
-## Customization
+## Constitution System
 
-### Change the Application
+Create project governance rules with the `/create-constitution` slash command:
 
-Edit `prompts/app_spec.txt` to specify what to build.
+```bash
+/create-constitution myproject --template plesk
+```
 
-### Adjust Issue Count
+Constitutions define:
+- Deployment target (Plesk, Vercel, AWS)
+- Secret naming conventions
+- TDD requirements
+- Browser verification settings
+- Agent constraints
 
-Edit `prompts/initializer_prompt.md` and change the number of issues to create.
+## Slash Commands
 
-### Modify Security
+Available in `.claude/commands/`:
+- `/idea-to-spec` - Transform an idea into `app_spec.txt`
+- `/generate-spec` - Generate spec from requirements
+- `/research-tech-stack` - Research optimal technology choices
+- `/regenerate-issues` - Regenerate issues when backlog is empty
+- `/create-constitution` - Create project governance rules
+- `/tdd-workflow` - Test-Driven Development workflow
 
-Edit `security.py` to add/remove allowed commands in `ALLOWED_COMMANDS`.
+## Documentation
+
+Detailed documentation is available in the `docs/` folder:
+
+- [IMPLEMENTATION_GUIDE.md](docs/IMPLEMENTATION_GUIDE.md) - Original implementation guide
+- [OPTIMIZATION_GUIDE.md](docs/OPTIMIZATION_GUIDE.md) - Performance optimizations
+- [PROJECT_SPECS_README.md](docs/PROJECT_SPECS_README.md) - Managing project specifications
+- [LOGGING.md](docs/LOGGING.md) - Logging system documentation
+- [IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md) - Agent reliability improvements
 
 ## Troubleshooting
 
 **"Control request timeout: initialize"**
-- **Cause:** Multiline system_prompt in ClaudeCodeOptions
-- **Fix:** Use single-line system_prompt (already fixed in both agents)
-- **Details:** See [SOLUTION_MULTILINE_PROMPT_FIX.md](SOLUTION_MULTILINE_PROMPT_FIX.md)
+- Use single-line system_prompt in ClaudeCodeOptions
+- See [SOLUTION_MULTILINE_PROMPT_FIX.md](docs/SOLUTION_MULTILINE_PROMPT_FIX.md)
 
-**"CLAUDE_CODE_OAUTH_TOKEN not set"**
-- Run `claude setup-token` to generate a token
-- Add it to `.env` file
-
-**"GitHub CLI not authenticated"**
-- Run `gh auth login` to authenticate
+**Rate limit errors (429)**
+- Add backup tokens to `.env` for automatic rotation
+- Reduce `--concurrent` sessions
 
 **Agent appears to hang on first run**
-- Normal behavior - initializer is creating GitHub project and issues
-- Watch for `[Tool: Bash]` output showing `gh issue create` commands
+- Normal - initializer is creating GitHub project and issues
+- Monitor with `python monitor.py ./project --watch`
 
-**Command blocked by security**
-- Agent tried to run a disallowed command
-- Add it to `ALLOWED_COMMANDS` in `security.py` if safe
-
-## Monitoring Progress
-
-### In GitHub
-- Open your repository to see the project board
-- Watch issues move through Todo → In Progress → Done
-- Read implementation comments on each issue
-
-### With Monitor Tool
-```bash
-python monitor.py ./my_project --watch
-```
-
-## Documentation
-
-- [SOLUTION_MULTILINE_PROMPT_FIX.md](SOLUTION_MULTILINE_PROMPT_FIX.md) - How we fixed the timeout issue
-- [README_SIMPLE_AGENT.md](README_SIMPLE_AGENT.md) - Debugging history and solution
-- [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) - Original implementation guide
-- [OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md) - Performance optimizations
-
-## GitHub CLI Commands Used
-
-```bash
-# Project management
-gh project create --title "Project Name" --owner @me
-gh project item-add [number] --owner @me --url [issue-url]
-gh project item-edit --project-id [id] --id [item-id] --field-id [field]
-
-# Issue management
-gh issue create --title "Title" --body "Body" --label "priority:high"
-gh issue list --state open --json number,title,labels
-gh issue comment [number] --body "Comment text"
-gh issue close [number]
-```
+**Stale claims blocking issues**
+- Claims auto-expire after 30 minutes
+- Force cleanup: delete `.issue_claims.json` in project directory
 
 ## License
 
@@ -252,6 +223,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Last Updated:** 2025-12-11
-**Status:** ✅ Agent working perfectly
-**Files:** Cleaned up - only working agent and core modules remain
+**Last Updated:** 2025-12-17

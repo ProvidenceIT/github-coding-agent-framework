@@ -3,10 +3,33 @@ generations/
 
 # Log files
 logs/
+*.log
 
-.env
-venv
+# Python
 __pycache__/
 __pycache__tmp/
 *.pyc
 *.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+.pytest_cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# Spec management
+.specify/
+specs/
+
+# OS files
+.DS_Store
+Thumbs.db
