@@ -9,15 +9,229 @@ Key Features:
 - Session-level status cache (invalidated on updates)
 - Rate limit tracking (5000/hour for authenticated requests)
 - Parse gh CLI JSON output for caching
+- Error classification for GitHub API failures (T045-T050)
 """
 
 import json
+import logging
+import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
 from github_config import GITHUB_RATE_LIMIT_HOURLY, GITHUB_RATE_LIMIT_WARNING_THRESHOLD
+from api_error_handler import (
+    APISource, RecoveryAction, APIError,
+    create_api_error, is_rate_limit,
+)
+
+
+# =============================================================================
+# GITHUB API ERROR HANDLING (T045-T050)
+# =============================================================================
+
+class GitHubAPIError(Exception):
+    """
+    Exception for classified GitHub API errors (T045).
+
+    Provides structured error information for recovery handling.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        recoverable: bool = False,
+        action: str = "abort",
+        raw_output: str = ""
+    ):
+        self.status_code = status_code
+        self.message = message
+        self.recoverable = recoverable
+        self.action = action
+        self.raw_output = raw_output
+        super().__init__(f"GitHub API {status_code}: {message}")
+
+    def to_api_error(self) -> APIError:
+        """Convert to standard APIError for unified handling."""
+        return create_api_error(APISource.GITHUB, self.status_code, self.raw_output)
+
+    def to_dict(self) -> dict:
+        """Serialize for logging."""
+        return {
+            "status_code": self.status_code,
+            "message": self.message,
+            "recoverable": self.recoverable,
+            "action": self.action,
+        }
+
+
+def execute_gh_command(
+    cmd: List[str],
+    cwd: Path,
+    timeout: int = 60,
+    logger: logging.Logger = None
+) -> Tuple[bool, str, str]:
+    """
+    Execute gh CLI command with error classification (T046).
+
+    Wraps subprocess.run with comprehensive error detection and classification
+    based on exit codes and stderr content.
+
+    Args:
+        cmd: Command list (e.g., ['gh', 'issue', 'list', ...])
+        cwd: Working directory
+        timeout: Command timeout in seconds
+        logger: Optional logger for error details
+
+    Returns:
+        Tuple of (success: bool, stdout: str, stderr: str)
+
+    Raises:
+        GitHubAPIError: If command fails with classifiable error
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=timeout
+        )
+
+        if result.returncode == 0:
+            return True, result.stdout, result.stderr
+
+        # T047: Classify error based on stderr content
+        stderr_lower = result.stderr.lower()
+        stdout_lower = result.stdout.lower()
+        combined = stderr_lower + stdout_lower
+
+        # Determine status code and classification
+        status_code = 0
+        message = "Unknown error"
+        recoverable = False
+        action = "abort"
+
+        # 401 - Authentication failed
+        if '401' in combined or 'unauthorized' in combined or 'authentication' in combined:
+            status_code = 401
+            message = "Authentication failed - run 'gh auth status' to check credentials"
+            recoverable = True
+            action = "rotate_token"
+
+        # 403 - Forbidden (rate limit or permissions)
+        elif '403' in combined or 'forbidden' in combined:
+            if 'rate limit' in combined or 'rate_limit' in combined:
+                status_code = 429  # Treat as rate limit
+                message = "Rate limited"
+                recoverable = True
+                action = "wait_retry"
+            else:
+                status_code = 403
+                message = "Permission denied - check repository access"
+                recoverable = False
+                action = "abort"
+
+        # 404 - Not found
+        elif '404' in combined or 'not found' in combined or 'could not find' in combined:
+            status_code = 404
+            message = "Resource not found - may have been deleted"
+            recoverable = False
+            action = "abort"
+
+        # 409 - Conflict
+        elif '409' in combined or 'conflict' in combined:
+            status_code = 409
+            message = "Conflict - may need to pull latest changes"
+            recoverable = True
+            action = "pull_retry"
+
+        # 422 - Validation failed
+        elif '422' in combined or 'validation' in combined or 'invalid' in combined:
+            status_code = 422
+            message = "Validation failed - check request format"
+            recoverable = False
+            action = "abort"
+
+        # 429 - Rate limited
+        elif '429' in combined or 'rate limit' in combined or 'too many requests' in combined:
+            status_code = 429
+            message = "Rate limited - wait before retrying"
+            recoverable = True
+            action = "wait_retry"
+
+        # 5xx - Server errors
+        elif '500' in combined or '502' in combined or '503' in combined or 'server error' in combined:
+            status_code = 500
+            message = "GitHub server error - retry later"
+            recoverable = True
+            action = "wait_retry"
+
+        # Timeout
+        elif 'timeout' in combined or 'timed out' in combined:
+            status_code = 504
+            message = "Request timed out"
+            recoverable = True
+            action = "wait_retry"
+
+        # Generic error
+        else:
+            status_code = result.returncode if result.returncode > 0 else 500
+            message = result.stderr.strip()[:200] if result.stderr else "Command failed"
+            recoverable = False
+            action = "abort"
+
+        # T050: Log error with classification
+        if logger:
+            logger.warning(
+                f"GitHub API error: {status_code} - {message}",
+                extra={
+                    'cmd': ' '.join(cmd),
+                    'status_code': status_code,
+                    'recoverable': recoverable,
+                    'action': action,
+                }
+            )
+
+        raise GitHubAPIError(
+            status_code=status_code,
+            message=message,
+            recoverable=recoverable,
+            action=action,
+            raw_output=result.stderr or result.stdout
+        )
+
+    except subprocess.TimeoutExpired:
+        if logger:
+            logger.error(f"Command timed out after {timeout}s: {' '.join(cmd)}")
+        raise GitHubAPIError(
+            status_code=504,
+            message=f"Command timed out after {timeout}s",
+            recoverable=True,
+            action="wait_retry",
+            raw_output=""
+        )
+
+    except GitHubAPIError:
+        raise  # Re-raise classified errors
+
+    except Exception as e:
+        if logger:
+            logger.error(f"Unexpected error executing gh command: {e}")
+        raise GitHubAPIError(
+            status_code=500,
+            message=str(e),
+            recoverable=False,
+            action="abort",
+            raw_output=str(e)
+        )
+
+
+# =============================================================================
+# GITHUB CACHE CLASS
+# =============================================================================
 
 
 class GitHubCache:

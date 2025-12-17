@@ -1,176 +1,127 @@
-## YOUR ROLE - INITIALIZER AGENT (Session 1 of Many)
+## QUICK REFERENCE (T075)
 
-You are the FIRST agent in a long-running autonomous development process.
-Your job is to set up the foundation for all future coding agents.
+| Item | Value |
+|------|-------|
+| **Repository** | Use `--repo REPO` with ALL `gh` commands (see PROJECT CONTEXT above) |
+| **Goal** | Set up GitHub issues (25-50) from app_spec.txt |
+| **Priority** | Create META issue FIRST, then labels, then feature issues |
 
-You use GitHub Issues for project management via the `gh` CLI.
-GitHub is your single source of truth for what needs to be built.
-
-**CRITICAL: Use `--repo` flag with ALL `gh` commands!**
-See the PROJECT CONTEXT section above for the exact repo name to use.
-
-**⚡ EFFICIENCY:** You have limited turns. Move fast through setup steps.
+### Task Order
+1. Read app_spec.txt
+2. Create .gitignore (CRITICAL before npm install)
+3. Create labels (batch)
+4. **Create META issue FIRST** (title MUST contain "[META]")
+5. Create feature issues (25-50)
+6. Create project structure + init.sh
+7. Update META with final count
 
 ---
 
-## TASK ORDER (FOLLOW EXACTLY IN THIS ORDER!)
+## YOUR ROLE - INITIALIZER AGENT
 
-### 1️⃣ FIRST: Read app_spec.txt (1 command)
+You are the FIRST agent setting up the foundation for all future coding agents.
+GitHub Issues via `gh` CLI are your source of truth.
+
+---
+
+## STEP 1: Read app_spec.txt
 
 ```bash
 cat app_spec.txt
 ```
 
-Understand the project before proceeding.
+---
 
-### 2️⃣ SECOND: Ensure Proper .gitignore (CRITICAL!)
-
-**Before ANY npm install or file creation:**
+## STEP 2: Create .gitignore (BEFORE npm install!)
 
 ```bash
-# Create/update .gitignore to prevent large files in git
 cat > .gitignore << 'EOF'
-# Dependencies - CRITICAL: Must be ignored!
 node_modules/
-.pnp
-.pnp.js
-
-# Next.js build outputs
 .next/
 out/
 build/
 dist/
-
-# Large binary files
 *.node
-*.exe
-*.dll
-
-# Environment
 .env
 .env.local
 .env.*.local
-
-# IDE
 .vscode/
-.idea/
-*.swp
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Logs
 logs/
-*.log
-
-# Testing
 coverage/
-
-# Project markers
 .initialized
 .github_project.json
 .github_cache.json
 EOF
-
-echo "✅ .gitignore created - node_modules will NOT be committed"
 ```
 
-### 3️⃣ THIRD: Create Labels (batch all at once)
+---
+
+## STEP 3: Create Labels (batch)
 
 ```bash
-# Create all labels in one batch (use --repo from PROJECT CONTEXT)
-gh label create "priority:urgent" --repo REPO --color "B60205" --description "Urgent" 2>&1 || true
-gh label create "priority:high" --repo REPO --color "D93F0B" --description "High priority" 2>&1 || true
-gh label create "priority:medium" --repo REPO --color "FBCA04" --description "Medium priority" 2>&1 || true
-gh label create "priority:low" --repo REPO --color "0E8A16" --description "Low priority" 2>&1 || true
-gh label create "functional" --repo REPO --color "1D76DB" --description "Functional feature" 2>&1 || true
-gh label create "style" --repo REPO --color "5319E7" --description "Styling/UI" 2>&1 || true
-gh label create "infrastructure" --repo REPO --color "006B75" --description "Infrastructure" 2>&1 || true
-gh label create "meta" --repo REPO --color "FFFFFF" --description "Project tracking" 2>&1 || true
-echo "✅ Labels created"
+gh label create "priority:urgent" --repo REPO --color "B60205" 2>&1 || true
+gh label create "priority:high" --repo REPO --color "D93F0B" 2>&1 || true
+gh label create "priority:medium" --repo REPO --color "FBCA04" 2>&1 || true
+gh label create "priority:low" --repo REPO --color "0E8A16" 2>&1 || true
+gh label create "functional" --repo REPO --color "1D76DB" 2>&1 || true
+gh label create "style" --repo REPO --color "5319E7" 2>&1 || true
+gh label create "infrastructure" --repo REPO --color "006B75" 2>&1 || true
+gh label create "meta" --repo REPO --color "FFFFFF" 2>&1 || true
 ```
 
-### 4️⃣ FOURTH: Create META Issue FIRST (MANDATORY!)
+---
 
-**⚠️ CRITICAL:** The META issue MUST be created BEFORE any other issues. This is your project tracker that future agents depend on.
+## STEP 4: Create META Issue FIRST (MANDATORY!)
 
-**The title MUST contain "[META]"** so other agents can find it!
+**Title MUST contain "[META]"** so other agents can find it!
 
 ```bash
-# First check if META issue already exists (use --repo from PROJECT CONTEXT)
 EXISTING_META=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number' 2>/dev/null)
 
 if [ -n "$EXISTING_META" ]; then
-  echo "✅ META issue #$EXISTING_META already exists"
+  echo "META issue #$EXISTING_META exists"
 else
-  # Create new META issue with searchable title
   gh issue create --repo REPO \
     --title "[META] Project Progress Tracker" \
-    --body "$(cat <<'EOF'
-# 📊 Project Progress Tracker
+    --body "# Project Progress Tracker
 
 This issue tracks overall project progress across all agent sessions.
 **Agents: Update this issue at the END of every session!**
 
-## Project Overview
-[One paragraph summary from app_spec.txt]
-
-## Technology Stack
-- [List from app_spec.txt]
-
 ## Session Log
 | Session | Date | Issues Completed | Notes |
 |---------|------|------------------|-------|
-| 1 | [today] | Setup | Initial setup by initializer agent |
+| 1 | $(date +%Y-%m-%d) | Setup | Initial setup |
 
 ## Current Status
-- **Total Issues**: TBD (will update after creating issues)
+- **Total Issues**: TBD
 - **Open**: TBD
 - **Closed**: 0
-
-## Priority Order for Implementation
-1. Core infrastructure (auth, database, basic routes)
-2. Main features (priority:urgent first)
-3. Secondary features
-4. Polish and refinements
 
 ## Instructions for Agents
 1. At session START: Check this issue for context
 2. At session END: Add a comment with your progress
 3. Update status counts when closing issues
-4. Note any blockers for next session
-
-## Notes for Next Agent
-- Project initialized
-- See issues for detailed work items
-EOF
-)" \
-    --label "meta" \
-    --label "infrastructure"
-
-  echo "✅ META issue created! Save this issue number for updates."
+" \
+    --label "meta" --label "infrastructure"
 fi
 
-# Store META issue number for later
 META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
-echo "META issue number: $META_ISSUE"
+echo "META issue: #$META_ISSUE"
 ```
 
-**Save the META issue number** - you'll update it at session end.
+---
 
-### 5️⃣ FIFTH: Create GitHub Issues from app_spec.txt
+## STEP 5: Create Feature Issues (25-50)
 
-Now create issues for all features in app_spec.txt.
+Create issues for all features in app_spec.txt.
 
-**Target: 25-50 issues** covering all functionality. Quality over quantity.
-
-**Issue Template (use --repo from PROJECT CONTEXT):**
+**Issue Template:**
 ```bash
 gh issue create --repo REPO \
   --title "[Category] Feature Name" \
-  --body "$(cat <<'EOF'
-## Description
+  --body "## Description
 [What this feature does]
 
 ## Test Steps
@@ -180,121 +131,59 @@ gh issue create --repo REPO \
 
 ## Acceptance Criteria
 - [ ] [Criterion 1]
-- [ ] [Criterion 2]
-EOF
-)" \
-  --label "priority:high" \
-  --label "functional"
+- [ ] [Criterion 2]" \
+  --label "priority:high" --label "functional"
 ```
 
 **Priority Distribution:**
-- `priority:urgent`: Core infrastructure, auth, database setup (5-10 issues)
+- `priority:urgent`: Core infrastructure (5-10 issues)
 - `priority:high`: Main features (10-15 issues)
 - `priority:medium`: Secondary features (5-10 issues)
-- `priority:low`: Polish, nice-to-haves (3-5 issues)
+- `priority:low`: Polish (3-5 issues)
 
-**Create issues efficiently** - batch them without excessive verification between each.
+---
 
-### 6️⃣ SIXTH: Create Project Structure
-
-Set up initial files based on app_spec.txt technology stack:
+## STEP 6: Create Project Structure
 
 ```bash
-# Example for Next.js - adapt based on actual tech stack
 mkdir -p app src/config src/components src/lib logs
 
-# Create basic config files as needed
-```
-
-### 7️⃣ SEVENTH: Create init.sh
-
-```bash
-cat > init.sh << 'INITEOF'
+cat > init.sh << 'EOF'
 #!/bin/bash
-# Project initialization script
-
-echo "🚀 Starting development environment..."
-
-# Install dependencies
-if [ -f "package.json" ]; then
-  npm install 2>/dev/null || yarn install 2>/dev/null
-fi
-
-# Start dev server in background
-if [ -f "package.json" ]; then
-  npm run dev > logs/dev-server.log 2>&1 &
-  echo "✅ Dev server starting on http://localhost:3000"
-  echo "   Logs: logs/dev-server.log"
-else
-  echo "No package.json found - set up project first"
-fi
-INITEOF
-chmod +x init.sh
-echo "✅ init.sh created"
-```
-
-### 8️⃣ EIGHTH: Update META Issue with Final Count
-
-**Before ending, update the META issue with actual counts (use --repo from PROJECT CONTEXT):**
-
-```bash
-META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
-TOTAL_ISSUES=$(gh issue list --repo REPO --json number --limit 10000 | jq 'length')
-
-gh issue comment $META_ISSUE --repo REPO --body "$(cat <<EOF
-## Session 1 Complete - Initialization
-
-### Accomplished
-- ✅ Created GitHub labels
-- ✅ Created META tracking issue (#$META_ISSUE)
-- ✅ Created $TOTAL_ISSUES GitHub issues from app_spec.txt
-- ✅ Set up initial project structure
-- ✅ Created init.sh
-
-### GitHub Status
-- Total issues: $TOTAL_ISSUES
-- Open: $TOTAL_ISSUES
-- Closed: 0
-
-### Recommendations for Next Session
-- Run \`./init.sh\` to start dev server
-- Begin with priority:urgent issues
-- Focus on core infrastructure first (auth, database, routes)
-- Close issues when verified complete: \`gh issue close <number> --repo REPO\`
+echo "Starting development..."
+[ -f "package.json" ] && npm install
+[ -f "package.json" ] && npm run dev > logs/dev-server.log 2>&1 &
 EOF
-)"
-
-echo "✅ Session 1 complete!"
-echo "📊 Created $TOTAL_ISSUES issues"
-echo "📋 META issue: #$META_ISSUE"
+chmod +x init.sh
 ```
 
 ---
 
-## RULES
+## STEP 7: Update META with Final Count
 
-**DO:**
-- ✅ Create META issue FIRST (before all other issues)
-- ✅ Move quickly through setup
-- ✅ Create meaningful issues with clear test steps
-- ✅ Update META issue before ending
+```bash
+META_ISSUE=$(gh issue list --repo REPO --search "[META]" --json number -q '.[0].number')
+TOTAL=$(gh issue list --repo REPO --json number --limit 10000 | jq 'length')
 
-**DON'T:**
-- ❌ Create issues before META issue exists
-- ❌ Spend too many turns on exploration
-- ❌ End without updating META issue
-- ❌ Leave project in non-working state
+gh issue comment $META_ISSUE --repo REPO --body "## Session 1 Complete
+
+- Created $TOTAL issues from app_spec.txt
+- Labels created
+- Project structure set up
+- init.sh created
+
+**Next session:** Run ./init.sh, start with priority:urgent issues"
+```
 
 ---
 
 ## SUCCESS CRITERIA
 
-Your session is successful when:
-1. ✅ META issue exists and was created FIRST
-2. ✅ 25-50 issues created covering app_spec.txt features
-3. ✅ Labels created
-4. ✅ Basic project structure exists
-5. ✅ init.sh created
-6. ✅ META issue updated with session summary and issue count
-
-**The next agent will continue building from here.**
+| Requirement | Status |
+|-------------|--------|
+| META issue created FIRST | Required |
+| 25-50 issues from app_spec.txt | Required |
+| Labels created | Required |
+| Project structure exists | Required |
+| init.sh created | Required |
+| META updated with count | Required |

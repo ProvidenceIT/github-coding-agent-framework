@@ -57,6 +57,26 @@ GITHUB_RATE_LIMIT_WARNING_THRESHOLD = 0.8  # Warn at 80%
 # Use 10000 to effectively get all issues (most projects have < 1000)
 GITHUB_ISSUE_LIST_LIMIT = 10000
 
+# ============================================================================
+# Agent Reliability Configuration
+# ============================================================================
+
+# Issue claim TTL in minutes - claims older than this are considered stale
+# and will be cleaned up automatically to prevent deadlocks
+CLAIM_TTL_MINUTES = 30
+
+# Maximum consecutive rounds with no issues available before terminating
+# Used for graceful termination when all issues are complete
+MAX_NO_ISSUES_ROUNDS = 3
+
+# Productivity score threshold - sessions with score below this after
+# 30+ tool calls are flagged as potentially stuck/unproductive
+# Formula: (files_changed * 2 + issues_closed * 5) / max(tool_count, 1)
+PRODUCTIVITY_THRESHOLD = 0.1
+
+# Number of failures before deprioritizing an issue in claim selection
+FAILURE_DEPRIORITIZE_THRESHOLD = 3
+
 # Default GitHub organization for new repos
 DEFAULT_GITHUB_ORG = "ProvidenceIT"
 

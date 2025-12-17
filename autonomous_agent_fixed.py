@@ -33,7 +33,7 @@ from github_cache import GitHubCache
 from github_enhanced import create_enhanced_integration
 from git_utils import create_git_manager
 from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_project, set_project_context
-from github_config import save_repo_info, get_repo_info, DEFAULT_GITHUB_ORG, GITHUB_ISSUE_LIST_LIMIT
+from github_config import save_repo_info, get_repo_info, DEFAULT_GITHUB_ORG, GITHUB_ISSUE_LIST_LIMIT, MAX_NO_ISSUES_ROUNDS
 from token_rotator import TokenRotator, get_rotator, set_rotator
 import re
 import json
@@ -96,21 +96,32 @@ def setup_session_logger(project_dir: Path) -> logging.Logger:
 
 
 
-def check_session_mandatory_outcomes(project_dir: Path, session_start_time: datetime, logger: logging.Logger = None) -> dict:
+def check_session_mandatory_outcomes(
+    project_dir: Path,
+    session_start_time: datetime,
+    logger: logging.Logger = None,
+    issues_worked: list = None  # T034: Add issues_worked parameter
+) -> dict:
     """
-    Check if a session achieved its mandatory outcomes:
+    Check if a session achieved its mandatory outcomes (T034):
     1. At least one issue was closed
     2. META issue was updated
     3. Changes were pushed (or attempted)
+
+    Enhanced to check SPECIFIC issues worked on by this session,
+    not time-based queries that count other sessions' work.
 
     Args:
         project_dir: Project directory
         session_start_time: When the session started
         logger: Optional logger
+        issues_worked: List of issue numbers THIS session worked on (T034)
 
     Returns:
         dict with keys:
+            - issues_worked: list of issues this session worked on
             - issues_closed: int
+            - issues_closed_list: list of closed issue numbers
             - meta_updated: bool
             - git_pushed: bool
             - success: bool
@@ -119,7 +130,9 @@ def check_session_mandatory_outcomes(project_dir: Path, session_start_time: date
     import subprocess
 
     result = {
+        'issues_worked': issues_worked or [],  # T034: Include issues_worked
         'issues_closed': 0,
+        'issues_closed_list': [],  # T034: Include list of closed issues
         'meta_updated': False,
         'git_pushed': False,
         'success': False,
@@ -127,39 +140,73 @@ def check_session_mandatory_outcomes(project_dir: Path, session_start_time: date
     }
 
     try:
-        # Check for recently closed issues (within last hour)
-        check_result = subprocess.run(
-            ['gh', 'issue', 'list', '--state', 'closed', '--json', 'number,closedAt', '--limit', str(GITHUB_ISSUE_LIST_LIMIT)],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        # T034: Check SPECIFIC issues worked on, not time-based
+        if issues_worked:
+            for issue_num in issues_worked:
+                try:
+                    # Check if this specific issue is now closed
+                    check = subprocess.run(
+                        ['gh', 'issue', 'view', str(issue_num), '--json', 'state', '-q', '.state'],
+                        cwd=project_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if check.returncode == 0 and check.stdout.strip().upper() == 'CLOSED':
+                        result['issues_closed'] += 1
+                        result['issues_closed_list'].append(issue_num)
+                        if logger:
+                            logger.info(f"Issue #{issue_num} confirmed closed")
+                except Exception as e:
+                    if logger:
+                        logger.warning(f"Failed to check issue #{issue_num}: {e}")
 
-        if check_result.returncode == 0:
-            import json
-            try:
-                issues = json.loads(check_result.stdout)
-                # Count issues closed in the last hour
-                from datetime import datetime, timedelta
-                one_hour_ago = datetime.now() - timedelta(hours=1)
+            # T034: Log outcome summary
+            if logger:
+                logger.info(
+                    f"Outcome validation: worked={result['issues_worked']}, "
+                    f"closed={result['issues_closed_list']}"
+                )
+        else:
+            # Fallback to time-based check if issues_worked not provided
+            check_result = subprocess.run(
+                ['gh', 'issue', 'list', '--state', 'closed', '--json', 'number,closedAt', '--limit', str(GITHUB_ISSUE_LIST_LIMIT)],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
 
-                for issue in issues:
-                    closed_at = issue.get('closedAt', '')
-                    if closed_at:
-                        try:
-                            # Parse ISO format datetime
-                            closed_time = datetime.fromisoformat(closed_at.replace('Z', '+00:00'))
-                            if closed_time.replace(tzinfo=None) > one_hour_ago:
-                                result['issues_closed'] += 1
-                        except:
-                            pass
+            if check_result.returncode == 0:
+                import json as json_mod
+                try:
+                    issues = json_mod.loads(check_result.stdout)
+                    # Count issues closed in the last hour
+                    from datetime import timedelta
+                    one_hour_ago = datetime.now() - timedelta(hours=1)
 
-            except json.JSONDecodeError:
-                pass
+                    for issue in issues:
+                        closed_at = issue.get('closedAt', '')
+                        if closed_at:
+                            try:
+                                # Parse ISO format datetime
+                                closed_time = datetime.fromisoformat(closed_at.replace('Z', '+00:00'))
+                                if closed_time.replace(tzinfo=None) > one_hour_ago:
+                                    result['issues_closed'] += 1
+                                    result['issues_closed_list'].append(issue['number'])
+                            except:
+                                pass
+
+                except json_mod.JSONDecodeError:
+                    pass
 
         if result['issues_closed'] == 0:
-            result['failures'].append("No issues were closed this session")
+            if issues_worked:
+                result['failures'].append(
+                    f"Worked on {len(issues_worked)} issue(s) but none closed: {issues_worked}"
+                )
+            else:
+                result['failures'].append("No issues were closed this session")
 
         # Check if META issue was updated (look for recent comments)
         meta_check = subprocess.run(
@@ -238,9 +285,50 @@ def check_session_mandatory_outcomes(project_dir: Path, session_start_time: date
     return result
 
 
-def analyze_session_health(response: str, session_id: str, logger: logging.Logger = None, tool_count: int = None) -> dict:
+def calculate_productivity_score(
+    tool_count: int,
+    files_changed: int = 0,
+    issues_closed: int = 0
+) -> float:
+    """
+    Calculate productivity score based on session metrics (T053).
+
+    Formula: (files_changed * 2 + issues_closed * 5) / max(tool_count, 1)
+
+    A high tool count with low file changes or issue closures indicates
+    low productivity (agent is spinning without making progress).
+
+    Args:
+        tool_count: Number of tool calls in session
+        files_changed: Number of files created or modified
+        issues_closed: Number of issues closed
+
+    Returns:
+        Productivity score (higher is better, 0.1 is minimum threshold)
+    """
+    if tool_count <= 0:
+        return 0.0
+
+    # Weight files changed (2 points) and issues closed (5 points)
+    numerator = (files_changed * 2) + (issues_closed * 5)
+    score = numerator / max(tool_count, 1)
+
+    return round(score, 3)
+
+
+def analyze_session_health(
+    response: str,
+    session_id: str,
+    logger: logging.Logger = None,
+    tool_count: int = None,
+    files_changed: int = 0,  # T052: Add files_changed parameter
+    issues_closed: int = 0    # T052: Add issues_closed parameter
+) -> dict:
     """
     Analyze the session response to detect if the agent is doing meaningful work.
+
+    Enhanced with productivity scoring (US6) to detect sessions that run
+    many tools but don't accomplish meaningful work.
 
     Args:
         response: The text response from the agent
@@ -248,6 +336,8 @@ def analyze_session_health(response: str, session_id: str, logger: logging.Logge
         logger: Logger instance
         tool_count: Actual number of tool calls made (from SDK). If provided, this
                    overrides pattern-based detection and is more accurate.
+        files_changed: Number of files modified this session (T052)
+        issues_closed: Number of issues closed this session (T052)
 
     Returns:
         dict with keys:
@@ -256,13 +346,19 @@ def analyze_session_health(response: str, session_id: str, logger: logging.Logge
             - tool_calls_count: int
             - response_length: int
             - has_content: bool
+            - productivity_score: float (T055)
+            - files_changed: int
+            - issues_closed: int
     """
     health_status = {
         'is_healthy': True,
         'warnings': [],
         'tool_calls_count': 0,
         'response_length': len(str(response)) if response else 0,
-        'has_content': bool(response and str(response).strip())
+        'has_content': bool(response and str(response).strip()),
+        'productivity_score': 0.0,  # T055: Add productivity_score
+        'files_changed': files_changed,
+        'issues_closed': issues_closed,
     }
 
     response_str = str(response) if response else ""
@@ -314,6 +410,30 @@ def analyze_session_health(response: str, session_id: str, logger: logging.Logge
         health_status['warnings'].append("No tool usage detected - agent may not be doing any work")
         if logger:
             logger.warning("Health check failed: No tool usage detected")
+
+    # T053-T054: Calculate and check productivity score
+    productivity_score = calculate_productivity_score(
+        tool_count=health_status['tool_calls_count'],
+        files_changed=files_changed,
+        issues_closed=issues_closed
+    )
+    health_status['productivity_score'] = productivity_score
+
+    # T054: Productivity warning check (high tool count but low productivity)
+    PRODUCTIVITY_TOOL_THRESHOLD = 30  # Tool count threshold
+    PRODUCTIVITY_SCORE_THRESHOLD = 0.1  # Minimum acceptable score
+
+    if health_status['tool_calls_count'] >= PRODUCTIVITY_TOOL_THRESHOLD and productivity_score < PRODUCTIVITY_SCORE_THRESHOLD:
+        health_status['warnings'].append(
+            f"Low productivity: {health_status['tool_calls_count']} tool calls but score={productivity_score:.3f} "
+            f"(files_changed={files_changed}, issues_closed={issues_closed})"
+        )
+        # T057: Log productivity warning
+        if logger:
+            logger.warning(
+                f"Productivity warning: {health_status['tool_calls_count']} tools, "
+                f"score={productivity_score:.3f}, files={files_changed}, issues={issues_closed}"
+            )
 
     # Check 4: Very short response with few tool calls
     if health_status['response_length'] < 200 and health_status['tool_calls_count'] < 2:
@@ -399,18 +519,22 @@ def analyze_session_health(response: str, session_id: str, logger: logging.Logge
 
 
 def log_health_warnings(health_status: dict, session_id: str, logger: logging.Logger):
-    """Log health warnings to console and logger."""
-    if not health_status['is_healthy']:
+    """Log health warnings to console and logger (T057)."""
+    if not health_status['is_healthy'] or health_status['warnings']:
         warning_msg = f"\n⚠️  SESSION HEALTH WARNING ({session_id}):"
         print(warning_msg)
         logger.warning("="*80)
         logger.warning(f"SESSION HEALTH WARNING: {session_id}")
         logger.warning("="*80)
 
+        # Include productivity metrics (T057)
         details = [
             f"   Response length: {health_status['response_length']} chars",
             f"   Tool calls detected: {health_status['tool_calls_count']}",
-            f"   Has content: {health_status['has_content']}"
+            f"   Has content: {health_status['has_content']}",
+            f"   Productivity score: {health_status.get('productivity_score', 0.0):.3f}",
+            f"   Files changed: {health_status.get('files_changed', 0)}",
+            f"   Issues closed: {health_status.get('issues_closed', 0)}",
         ]
 
         for detail in details:
@@ -1039,6 +1163,9 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
     logger.debug(f"  Max turns: {client_options.max_turns}")
 
     iteration = 0
+    # T028: Graceful termination tracking for empty backlog
+    consecutive_no_issues = 0
+
     while True:
             iteration += 1
             iteration_start_time = time.time()
@@ -1207,6 +1334,45 @@ async def main(project_dir: Path, model: str, max_iterations: int = None, projec
 
                 iteration_duration = time.time() - iteration_start_time
                 logger.info(f"ITERATION {iteration} COMPLETED in {iteration_duration:.2f}s")
+
+                # T028: Check for graceful termination (empty backlog)
+                if not is_first_run:
+                    # Check if session found no issues to work on
+                    no_issues_detected = False
+                    if outcomes and outcomes.get('issues_closed', 0) == 0:
+                        # Check if there are any open issues remaining
+                        try:
+                            result = subprocess.run(
+                                ['gh', 'issue', 'list', '--repo', repo_info.get('repo', ''),
+                                 '--state', 'open', '--json', 'number,title', '--limit', '5'],
+                                capture_output=True, text=True, cwd=project_dir, timeout=30
+                            )
+                            if result.returncode == 0:
+                                open_issues = json.loads(result.stdout)
+                                # Filter out META issue
+                                non_meta_issues = [i for i in open_issues if '[META]' not in i.get('title', '').upper()]
+                                if len(non_meta_issues) == 0:
+                                    no_issues_detected = True
+                        except Exception:
+                            pass
+
+                    if no_issues_detected:
+                        consecutive_no_issues += 1
+                        logger.info(f"No issues found - consecutive count: {consecutive_no_issues}/{MAX_NO_ISSUES_ROUNDS}")
+                        print(f"\n⚠️  No issues to work on ({consecutive_no_issues}/{MAX_NO_ISSUES_ROUNDS} consecutive rounds)")
+
+                        if consecutive_no_issues >= MAX_NO_ISSUES_ROUNDS:
+                            print(f"\n{'='*70}")
+                            print(f"  ALL ISSUES COMPLETE - Stopping agent")
+                            print(f"  ({consecutive_no_issues} consecutive rounds with no issues)")
+                            print(f"{'='*70}\n")
+                            logger.info("Graceful termination: All issues complete")
+                            break
+                    else:
+                        # Reset counter if work was found
+                        if consecutive_no_issues > 0:
+                            logger.info("Work found - resetting consecutive_no_issues counter")
+                        consecutive_no_issues = 0
 
             except Exception as e:
                 iteration_duration = time.time() - iteration_start_time

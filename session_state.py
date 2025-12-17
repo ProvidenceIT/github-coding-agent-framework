@@ -4,11 +4,167 @@ Session State Tracking
 
 Lightweight checkpoint system to reduce redundant exploration across sessions.
 Saves minimal state between sessions to help agents orient faster.
+
+Also includes session outcome tracking with productivity metrics for the
+agent reliability feature.
 """
+from dataclasses import dataclass, field
 from pathlib import Path
 import json
 from datetime import datetime
+from enum import Enum
 from typing import Dict, List, Optional
+
+from github_config import PRODUCTIVITY_THRESHOLD
+
+
+# =============================================================================
+# Session Outcome Tracking (Agent Reliability Feature)
+# =============================================================================
+
+class OutcomeStatus(Enum):
+    """Overall session outcome status."""
+    SUCCESS = "success"              # Closed issues, made changes
+    PARTIAL = "partial"              # Some work done, not all closed
+    NO_WORK = "no_work"              # No issues available
+    FAILED = "failed"                # Errors prevented completion
+    UNHEALTHY = "unhealthy"          # Session health check failed
+
+
+@dataclass
+class ProductivityMetrics:
+    """
+    Metrics for calculating session productivity.
+
+    Used to detect "busy but unproductive" sessions.
+    """
+    tool_count: int                      # Total tool invocations
+    files_changed: int                   # Files with modifications
+    issues_closed: int                   # Issues successfully closed
+    response_length: int = 0             # Total response text length
+
+    @property
+    def score(self) -> float:
+        """
+        Calculate productivity score.
+
+        Formula: (files_changed * 2 + issues_closed * 5) / max(tool_count, 1)
+
+        Interpretation:
+        - < 0.1: Very low productivity (many tools, no output)
+        - 0.1-0.5: Low productivity
+        - 0.5-1.0: Normal productivity
+        - > 1.0: High productivity
+        """
+        outcomes = self.files_changed * 2 + self.issues_closed * 5
+        return outcomes / max(self.tool_count, 1)
+
+    @property
+    def is_low_productivity(self) -> bool:
+        """Check if productivity is below warning threshold."""
+        return self.tool_count >= 30 and self.score < PRODUCTIVITY_THRESHOLD
+
+    def get_warnings(self) -> List[str]:
+        """Generate productivity warnings if applicable."""
+        warnings = []
+
+        if self.tool_count >= 30 and self.files_changed == 0:
+            warnings.append(
+                f"Low productivity: {self.tool_count} tool calls but 0 files changed"
+            )
+
+        if self.tool_count >= 30 and self.score < PRODUCTIVITY_THRESHOLD:
+            warnings.append(
+                f"Productivity score {self.score:.3f} below threshold {PRODUCTIVITY_THRESHOLD}"
+            )
+
+        return warnings
+
+
+@dataclass
+class SessionOutcome:
+    """
+    Represents the result of a coding session.
+
+    Key improvement: tracks SPECIFIC issues worked on,
+    not time-based queries that count other sessions' work.
+    """
+    session_id: str                      # Session identifier
+    issues_worked: List[int]             # Issues THIS session claimed
+    issues_closed: List[int]             # Issues THIS session closed
+    files_changed: int                   # Number of files modified
+    tool_count: int                      # Total tool invocations
+    duration_seconds: float              # Session duration
+    started_at: datetime                 # Session start time
+    ended_at: Optional[datetime] = None  # Session end time
+    status: OutcomeStatus = OutcomeStatus.PARTIAL
+    warnings: List[str] = field(default_factory=list)
+
+    @property
+    def success_rate(self) -> float:
+        """Percentage of worked issues that were closed."""
+        if not self.issues_worked:
+            return 0.0
+        return len(self.issues_closed) / len(self.issues_worked)
+
+    @property
+    def is_successful(self) -> bool:
+        """True if at least one issue closed and code changed."""
+        return len(self.issues_closed) >= 1 and self.files_changed > 0
+
+    @property
+    def productivity_score(self) -> float:
+        """Calculate productivity score."""
+        metrics = ProductivityMetrics(
+            tool_count=self.tool_count,
+            files_changed=self.files_changed,
+            issues_closed=len(self.issues_closed),
+        )
+        return metrics.score
+
+    def to_metrics(self) -> ProductivityMetrics:
+        """Convert to ProductivityMetrics for analysis."""
+        return ProductivityMetrics(
+            tool_count=self.tool_count,
+            files_changed=self.files_changed,
+            issues_closed=len(self.issues_closed),
+            response_length=0,  # Not tracked at this level
+        )
+
+    def determine_status(self) -> OutcomeStatus:
+        """Determine outcome status based on results."""
+        if not self.issues_worked:
+            return OutcomeStatus.NO_WORK
+
+        if self.is_successful:
+            return OutcomeStatus.SUCCESS
+
+        if self.files_changed > 0 or len(self.issues_closed) > 0:
+            return OutcomeStatus.PARTIAL
+
+        return OutcomeStatus.FAILED
+
+    def to_dict(self) -> Dict:
+        """Serialize for logging."""
+        return {
+            "session_id": self.session_id,
+            "issues_worked": self.issues_worked,
+            "issues_closed": self.issues_closed,
+            "files_changed": self.files_changed,
+            "tool_count": self.tool_count,
+            "duration_seconds": self.duration_seconds,
+            "started_at": self.started_at.isoformat(),
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "status": self.status.value,
+            "success_rate": self.success_rate,
+            "productivity_score": self.productivity_score,
+            "warnings": self.warnings,
+        }
+
+
+# =============================================================================
+# Original Session Checkpoint Functions
+# =============================================================================
 
 
 def save_session_checkpoint(project_dir: Path, data: dict) -> None:

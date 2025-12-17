@@ -73,7 +73,15 @@ class StructuredLogger:
             'github_api_cached': 0,
             'tools_used': {},
             'errors': 0,
-            'session_start': datetime.now().isoformat()
+            'session_start': datetime.now().isoformat(),
+            # T058: Productivity metrics
+            'productivity': {
+                'tool_count': 0,
+                'files_changed': 0,
+                'issues_closed': 0,
+                'score': 0.0,
+                'warnings': []
+            }
         }
 
     def _setup_logger(self, log_level: str) -> logging.Logger:
@@ -254,6 +262,54 @@ class StructuredLogger:
             }
         )
 
+    def log_productivity_metrics(
+        self,
+        tool_count: int,
+        files_changed: int,
+        issues_closed: int,
+        productivity_score: float,
+        warnings: list = None
+    ):
+        """
+        Log productivity metrics for the session (T058).
+
+        Args:
+            tool_count: Total tool calls in session
+            files_changed: Files created or modified
+            issues_closed: Issues closed this session
+            productivity_score: Calculated productivity score
+            warnings: List of productivity warning messages
+        """
+        # Update metrics
+        self.metrics['productivity'] = {
+            'tool_count': tool_count,
+            'files_changed': files_changed,
+            'issues_closed': issues_closed,
+            'score': productivity_score,
+            'warnings': warnings or []
+        }
+
+        # Log with appropriate level based on productivity
+        level = logging.INFO
+        message = f"Productivity: score={productivity_score:.3f}, tools={tool_count}, files={files_changed}, issues={issues_closed}"
+
+        if productivity_score < 0.1 and tool_count >= 30:
+            level = logging.WARNING
+            message = f"LOW {message}"
+
+        self.logger.log(
+            level,
+            message,
+            extra={
+                'category': 'productivity',
+                'tool_count': tool_count,
+                'files_changed': files_changed,
+                'issues_closed': issues_closed,
+                'productivity_score': productivity_score,
+                'warnings': warnings or []
+            }
+        )
+
     def log_session_end(self, issues_completed: int, issues_attempted: int):
         """Log session end with summary."""
         self.metrics['session_end'] = datetime.now().isoformat()
@@ -310,7 +366,9 @@ class StructuredFormatter(logging.Formatter):
                        'issue_id', 'issue_title', 'priority', 'duration_minutes',
                        'files_changed', 'passed', 'test_type', 'error_type',
                        'error_message', 'issues_completed', 'issues_attempted',
-                       'metrics', 'metadata']
+                       'metrics', 'metadata',
+                       # T058: Productivity fields
+                       'tool_count', 'issues_closed', 'productivity_score', 'warnings']
 
         for field in extra_fields:
             if hasattr(record, field):
@@ -342,6 +400,7 @@ class ConsoleFormatter(logging.Formatter):
         'verification': '✅',
         'error': '❌',
         'session': '🚀',
+        'productivity': '📊',  # T058
         'default': 'ℹ️'
     }
 

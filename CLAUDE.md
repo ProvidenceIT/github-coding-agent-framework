@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -179,6 +179,108 @@ The `parallel_agent.py` enables running multiple sessions concurrently:
 - Outcome validation (issues closed, git pushed)
 - Automatic retry on unhealthy sessions
 - Constitution support for project governance rules
+
+## Agent Reliability Features (v3)
+
+New reliability improvements implemented in Phases 6-11:
+
+### Issue Claim Lifecycle (US1)
+
+**TTL-Based Expiration**: Claims expire after 30 minutes (configurable via `CLAIM_TTL_MINUTES` in `github_config.py`). This prevents orphaned claims from blocking issues indefinitely.
+
+**Stale Claim Cleanup**: Before claiming a new issue, the lock manager automatically cleans up expired claims from other sessions.
+
+**Failure Tracking**: Issues track failure counts. After 3 failures (`FAILURE_DEPRIORITIZE_THRESHOLD`), issues are deprioritized and sorted last in the queue.
+
+```python
+# Configuration in github_config.py
+CLAIM_TTL_MINUTES = 30  # Claims expire after 30 minutes
+FAILURE_DEPRIORITIZE_THRESHOLD = 3  # Issues deprioritized after 3 failures
+```
+
+### Graceful Termination (US2)
+
+**Backlog Depletion Detection**: If parallel sessions find no available issues for `MAX_NO_ISSUES_ROUNDS` consecutive rounds (default: 3), the agent terminates gracefully instead of spinning.
+
+```python
+MAX_NO_ISSUES_ROUNDS = 3  # Terminate after 3 rounds with no issues
+```
+
+### Outcome Validation (US3)
+
+**Issue-Specific Tracking**: Sessions track specific issues worked on (`issues_worked` list) and validate closures against those specific issues, not time-based queries.
+
+**Productivity Metrics**: Sessions calculate a productivity score:
+```
+score = (files_changed * 2 + issues_closed * 5) / max(tool_count, 1)
+```
+
+Low productivity warnings trigger when `tool_count >= 30` and `score < 0.1`.
+
+### API Error Classification (US4, US5)
+
+**Claude API Errors**: Classified with recovery actions:
+- 401: `ROTATE_TOKEN` - Try different API key
+- 429: `WAIT_AND_RETRY` - Exponential backoff (60s base)
+- 500/529: `WAIT_AND_RETRY` - Server errors (30s/120s)
+- 400: `MANUAL_REVIEW` - Content filtering
+
+**GitHub API Errors**: Via `execute_gh_command()` wrapper:
+- 401: Authentication failed → rotate token
+- 403: Forbidden → may be rate limit
+- 404: Not found → abort
+- 409: Conflict → pull and retry
+- 429: Rate limited → wait and retry
+
+### Session Health Monitoring (US6)
+
+**Productivity Scoring**: Each session's productivity is scored based on:
+- Tool calls made
+- Files changed
+- Issues closed
+
+Low-productivity sessions (high tool count, no progress) generate warnings in logs.
+
+### GitHub Projects Integration (US7)
+
+**Kanban Board**: Issues automatically move through project board columns:
+- When claimed → "In Progress"
+- When closed → "Done"
+
+```python
+from github_projects import create_projects_manager
+
+manager = create_projects_manager(project_dir, "owner/repo")
+manager.get_or_create_project()
+manager.move_to_in_progress(42)
+manager.move_to_done(42)
+```
+
+### API Error Handler Module
+
+New `api_error_handler.py` provides:
+
+```python
+from api_error_handler import classify_error, APISource, get_retry_delay
+
+# Classify an error
+error = classify_error(APISource.CLAUDE, 429, "Rate limited")
+if error.should_retry():
+    delay = get_retry_delay(error, attempt=0)
+    time.sleep(delay)
+```
+
+### New Files
+
+```
+api_error_handler.py    # API error classification and recovery
+issue_claim_manager.py  # IssueClaim dataclass
+github_projects.py      # GitHub Projects v2 integration
+tests/
+  test_api_error_handler.py   # Error classification tests
+  test_claim_lifecycle.py     # TTL/failure tracking tests
+  test_outcome_validation.py  # Outcome validation tests
+```
 
 ## Project Constitution System
 
